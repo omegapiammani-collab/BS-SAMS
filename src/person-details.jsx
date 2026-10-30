@@ -1,5 +1,5 @@
 import React from "react";
-import { Pencil, Phone, MapPin, UserRound } from "lucide-react";
+import { Pencil, Phone, MapPin, UserRound, RotateCcw } from "lucide-react";
 import { Modal } from "./ui";
 import {
   age,
@@ -31,12 +31,34 @@ function Facts({ items }) {
     </dl>
   );
 }
-export function PersonDetails({ person: p, config, onClose, onEdit }) {
+export function PersonDetails({
+  person: p,
+  config,
+  onClose,
+  onEdit,
+  onRestore,
+}) {
   const payments = p.requests.flatMap((r) => r.payments),
     village = config.villages.find((v) => v.id === p.village);
   const total = sumMoney(payments);
   return (
-    <Modal title="รายละเอียดผู้ประสบปัญหา" onClose={onClose} wide>
+    <Modal
+      title={p.deletedAt ? "ทะเบียนในถังขยะ" : "รายละเอียดผู้ประสบปัญหา"}
+      onClose={onClose}
+      wide
+    >
+      {p.deletedAt && (
+        <div className="notice archive-notice">
+          <strong>ทะเบียนนี้อยู่ในถังขยะ</strong>
+          <p>
+            ลบโดย {p.deletedBy} ·{" "}
+            {new Date(p.deletedAt).toLocaleString("th-TH", {
+              timeZone: "Asia/Bangkok",
+            })}
+          </p>
+          <p>เหตุผล: {p.deleteReason}</p>
+        </div>
+      )}
       <div className="person-details">
         <div className="person-identity">
           <div className="detail-avatar">
@@ -176,6 +198,12 @@ export function PersonDetails({ person: p, config, onClose, onEdit }) {
       </div>
       <div className="modal-actions">
         <button onClick={onClose}>ปิดรายละเอียด</button>
+        {onRestore && (
+          <button className="primary" onClick={onRestore}>
+            <RotateCcw size={16} />
+            กู้คืนทะเบียน
+          </button>
+        )}
         {onEdit && (
           <button className="primary" onClick={onEdit}>
             <Pencil size={16} />

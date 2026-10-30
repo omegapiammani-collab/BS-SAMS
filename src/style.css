@@ -1818,3 +1818,12 @@ footer,
 .duplicate-list strong {
   font-size: 15px;
 }
+.archive-notice p {
+  margin: 6px 0 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.user-admin-title {
+  flex-wrap: wrap;
+}

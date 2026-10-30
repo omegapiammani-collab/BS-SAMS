@@ -169,6 +169,7 @@ export function personListItem(row) {
   const p = JSON.parse(row.data);
   return {
     id: row.id,
+    version: row.version,
     title: p.title,
     first: p.first,
     last: p.last,

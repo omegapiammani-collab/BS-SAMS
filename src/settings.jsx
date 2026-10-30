@@ -1,7 +1,7 @@
 import { useUnsavedChanges } from "./use-unsaved-changes";
 import { AuditHistory } from "./audit-history";
 import React, { useEffect, useState, useRef } from "react";
-import { Plus, Pencil, Save, KeyRound } from "lucide-react";
+import { Plus, Pencil, Save, KeyRound, RefreshCw } from "lucide-react";
 import { api } from "./api";
 import { permissions, permissionLabels, categories } from "./domain";
 import { Modal, Field, Select, ErrorBox, ConfirmDialog } from "./ui";
@@ -27,11 +27,16 @@ export function UserAdmin({ config, me }) {
     if (editDirty) setConfirmClose(true);
     else setEdit(null);
   }
+  const [loading, setLoading] = useState(false);
   async function load() {
+    setLoading(true);
+    setError("");
     try {
       setUsers(await api("/users"));
     } catch (e) {
       setError(e.message);
+    } finally {
+      setLoading(false);
     }
   }
   useEffect(() => {
@@ -49,10 +54,14 @@ export function UserAdmin({ config, me }) {
         </p>
       )}
       <section className="panel">
-        <div className="panel-title">
+        <div className="panel-title user-admin-title">
           <h2>
             บัญชีผู้ใช้งาน <small>{users.length} บัญชี</small>
           </h2>
+          <button onClick={load} disabled={loading}>
+            <RefreshCw size={17} />
+            {loading ? "กำลังโหลดรายชื่อ…" : "โหลดรายชื่อล่าสุด"}
+          </button>
           <button
             className="primary"
             onClick={() => {
@@ -566,6 +575,7 @@ function ResetPasswordDialog({ user, onClose, onSaved }) {
     try {
       await api("/users/" + user.id + "/reset-password", "POST", {
         password: b.password,
+        version: user.version,
       });
       onSaved();
     } catch (e) {

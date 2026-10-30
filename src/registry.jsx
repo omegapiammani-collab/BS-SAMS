@@ -84,6 +84,8 @@ export function Registry({ user, config, refresh }) {
     [editor, setEditor] = useState(null),
     [selection, setSelection] = useState(null),
     [deleting, setDeleting] = useState(null),
+    [restoring, setRestoring] = useState(null),
+    [actionError, setActionError] = useState(""),
     [busy, setBusy] = useState(false);
   const requestVersion = useRef(0);
   const params = new URLSearchParams({
@@ -535,25 +537,27 @@ export function Registry({ user, config, refresh }) {
                     <td>
                       <div className="actions">
                         {trash ? (
-                          <button
-                            title="กู้คืน"
-                            onClick={async () => {
-                              try {
-                                await api(
-                                  `/people/${p.id}/restore`,
-                                  "POST",
-                                  {},
-                                );
-                                load();
-                                refresh();
-                              } catch (e) {
-                                setError(e.message);
+                          <>
+                            <button
+                              className="icon"
+                              aria-label={"ดูทะเบียนในถังขยะ " + p.first}
+                              onClick={() =>
+                                setSelection({ id: p.id, mode: "archive" })
                               }
-                            }}
-                          >
-                            <RotateCcw size={17} />
-                            กู้คืน
-                          </button>
+                            >
+                              <Eye size={17} />
+                            </button>
+                            <button
+                              title="กู้คืน"
+                              onClick={() => {
+                                setActionError("");
+                                setRestoring(p);
+                              }}
+                            >
+                              <RotateCcw size={17} />
+                              กู้คืน
+                            </button>
+                          </>
                         ) : (
                           <>
                             <button
@@ -580,7 +584,10 @@ export function Registry({ user, config, refresh }) {
                               <button
                                 className="icon danger"
                                 aria-label={`ลบ ${p.first}`}
-                                onClick={() => setDeleting(p)}
+                                onClick={() => {
+                                  setActionError("");
+                                  setDeleting(p);
+                                }}
                               >
                                 <Trash2 size={17} />
                               </button>
@@ -679,6 +686,11 @@ export function Registry({ user, config, refresh }) {
           user={user}
           onClose={() => setSelection(null)}
           onEdit={() => setSelection({ ...selection, mode: "edit" })}
+          onRestore={(p) => {
+            setActionError("");
+            setSelection(null);
+            setRestoring(p);
+          }}
           onSaved={() => {
             setSelection(null);
             load();
@@ -686,35 +698,90 @@ export function Registry({ user, config, refresh }) {
           }}
         />
       )}
+      {restoring && (
+        <Modal
+          title="ยืนยันกู้คืนทะเบียน"
+          closeDisabled={busy}
+          onClose={() => !busy && setRestoring(null)}
+        >
+          <ErrorBox error={actionError} />
+          <p>
+            กู้คืนทะเบียนของ {restoring.title}
+            {restoring.first} {restoring.last}{" "}
+            พร้อมคำขอและประวัติการช่วยเหลือกลับสู่รายการปกติ
+          </p>
+          <div className="modal-actions">
+            <button disabled={busy} onClick={() => setRestoring(null)}>
+              ยกเลิก
+            </button>
+            <button
+              className="primary"
+              disabled={busy}
+              onClick={async () => {
+                setBusy(true);
+                setActionError("");
+                try {
+                  await api("/people/" + restoring.id + "/restore", "POST", {
+                    version: restoring.version,
+                  });
+                  setRestoring(null);
+                  load();
+                  refresh();
+                } catch (e) {
+                  setActionError(e.message);
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            >
+              {busy ? "กำลังกู้คืน…" : "ยืนยันกู้คืน"}
+            </button>
+          </div>
+        </Modal>
+      )}
       {deleting && (
-        <Modal title="ย้ายข้อมูลเข้าถังขยะ" onClose={() => setDeleting(null)}>
+        <Modal
+          title="ย้ายข้อมูลเข้าถังขยะ"
+          closeDisabled={busy}
+          onClose={() => !busy && setDeleting(null)}
+        >
           <form
             onSubmit={async (e) => {
               e.preventDefault();
               try {
                 setBusy(true);
-                await api(
-                  "/people/" + deleting.id,
-                  "DELETE",
-                  Object.fromEntries(new FormData(e.target)),
-                );
+                await api("/people/" + deleting.id, "DELETE", {
+                  ...Object.fromEntries(new FormData(e.target)),
+                  version: deleting.version,
+                });
                 setDeleting(null);
                 load();
                 refresh();
               } catch (e) {
-                setError(e.message);
+                setActionError(e.message);
               } finally {
                 setBusy(false);
               }
             }}
           >
+            <ErrorBox error={actionError} />
             <p>
               {deleting.first} {deleting.last}{" "}
               พร้อมคำขอและประวัติการช่วยเหลือจะถูกซ่อน ผู้ดูแลกู้คืนได้
             </p>
-            <Field label="เหตุผลการลบ" name="reason" required />
+            <Field
+              label="เหตุผลการลบ"
+              name="reason"
+              disabled={busy}
+              required
+              maxLength={1000}
+            />
             <div className="modal-actions">
-              <button type="button" onClick={() => setDeleting(null)}>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => setDeleting(null)}
+              >
                 ยกเลิก
               </button>
               <button className="danger-button" disabled={busy}>
@@ -1345,7 +1412,15 @@ function PersonEditor({ person, config, user, onClose, onSaved }) {
   );
 }
 
-function RecordDialog({ selection, config, user, onClose, onSaved, onEdit }) {
+function RecordDialog({
+  selection,
+  config,
+  user,
+  onClose,
+  onSaved,
+  onEdit,
+  onRestore,
+}) {
   const [result, setResult] = useState(null),
     [error, setError] = useState("");
   const key = selection.id + ":" + selection.mode;
@@ -1353,9 +1428,16 @@ function RecordDialog({ selection, config, user, onClose, onSaved, onEdit }) {
     const controller = new AbortController();
     setResult(null);
     setError("");
-    api("/people/" + selection.id, "GET", undefined, {
-      signal: controller.signal,
-    })
+    api(
+      "/people/" +
+        selection.id +
+        (selection.mode === "archive" ? "?trash=1" : ""),
+      "GET",
+      undefined,
+      {
+        signal: controller.signal,
+      },
+    )
       .then((data) => {
         if (!controller.signal.aborted) setResult({ key, data });
       })
@@ -1392,7 +1474,16 @@ function RecordDialog({ selection, config, user, onClose, onSaved, onEdit }) {
       person={result.data}
       config={config}
       onClose={onClose}
-      onEdit={can(user, "edit", result.data.village) ? onEdit : undefined}
+      onEdit={
+        !result.data.deletedAt && can(user, "edit", result.data.village)
+          ? onEdit
+          : undefined
+      }
+      onRestore={
+        result.data.deletedAt && onRestore
+          ? () => onRestore(result.data)
+          : undefined
+      }
     />
   );
 }

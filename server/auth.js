@@ -36,6 +36,7 @@ export function safeUser(u) {
     villages: JSON.parse(u.villages),
     mustChange: !!u.must_change,
     active: !!u.active,
+    version: u.version,
   };
 }
 export function allowed(u, permission, village) {

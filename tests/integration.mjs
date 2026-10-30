@@ -1,3 +1,4 @@
+import { summarize } from "./helpers/reference-summary.js";
 import { chromium } from "@playwright/test";
 import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
@@ -61,7 +62,7 @@ try {
   );
   const adminId = "qa-" + crypto.randomUUID();
   sql(
-    `INSERT INTO users VALUES('${adminId}','qa-admin','ผู้ดูแลทดสอบ','${await hashPassword(pass)}','admin','[]','[]',1,1);`,
+    `INSERT INTO users(id,username,name,password,role,permissions,villages,must_change,active) VALUES('${adminId}','qa-admin','ผู้ดูแลทดสอบ','${await hashPassword(pass)}','admin','[]','[]',1,1);`,
   );
   worker = spawn(
     process.execPath,
@@ -329,6 +330,7 @@ try {
     assert.equal(p.requests[0].payments[0].amount, "3000");
     const moneySummary = (await call("/summary?from=2026-10-01&to=2027-09-30"))
       .data;
+    assert.deepEqual(moneySummary, summarize([p], "2026-10-01", "2027-09-30"));
     assert.equal(moneySummary.amount, 3000.3);
     assert.equal(moneySummary.monthly[0].amount, 3000.3);
     const invalidMoney = {
@@ -453,6 +455,10 @@ try {
       auditBefore + 1,
     );
     const mixedSummary = await call("/summary?from=2026-10-01&to=2027-09-30");
+    assert.deepEqual(
+      mixedSummary.data,
+      summarize([updated.data], "2026-10-01", "2027-09-30"),
+    );
     assert.equal(mixedSummary.data.done, 0);
     assert.equal(mixedSummary.data.partial, 1);
     p.requests = updated.data.requests;
@@ -817,19 +823,156 @@ try {
       false,
     );
 
+    const beforeDelete = (await call("/people/" + p.id)).data;
     assert.equal(
-      (await call("/people/" + p.id, "DELETE", { reason: "ทดสอบถังขยะ" }))
-        .status,
-      200,
+      (
+        await call("/people/" + p.id, "DELETE", {
+          reason: "ทดสอบถังขยะ",
+          version: beforeDelete.version + 100,
+        })
+      ).status,
+      409,
     );
-    assert.ok(
-      (await call("/people?trash=1")).data.items.some((x) => x.id === p.id),
-    );
+    const deletingBody = {
+      reason: "ทดสอบถังขยะ",
+      version: beforeDelete.version,
+    };
+    const deletedResults = await Promise.all([
+      call("/people/" + p.id, "DELETE", deletingBody),
+      call("/people/" + p.id, "DELETE", deletingBody),
+    ]);
+    assert.ok(deletedResults.every((r) => r.status === 200));
+    assert.equal(deletedResults.filter((r) => r.data.changed).length, 1);
+    const archive = (await call("/people/" + p.id + "?trash=1")).data;
+    assert.equal(archive.version, beforeDelete.version + 1);
+    assert.equal(archive.deleteReason, "ทดสอบถังขยะ");
     assert.equal((await call("/people/" + p.id)).status, 404);
     assert.equal(
-      (await call("/people/" + p.id + "/restore", "POST", {})).status,
-      200,
+      (await call("/export", "POST", { filters: { q: p.id } })).data.length,
+      0,
     );
+    assert.equal(
+      (await call("/people/" + p.id, "DELETE", deletingBody)).data.changed,
+      false,
+    );
+    assert.equal(
+      (
+        await call("/people/" + p.id, "DELETE", {
+          ...deletingBody,
+          reason: "เหตุผลคำสั่งซ้ำ",
+        })
+      ).data.changed,
+      false,
+    );
+    assert.equal(
+      (await call("/people/" + p.id + "?trash=1")).data.deleteReason,
+      "ทดสอบถังขยะ",
+    );
+
+    assert.equal(
+      (await call("/audit?action=delete-person&target=" + p.id)).data.total,
+      1,
+    );
+    assert.equal(
+      (
+        await call("/people/" + p.id + "/restore", "POST", {
+          version: archive.version + 100,
+        })
+      ).status,
+      409,
+    );
+    const restoredResults = await Promise.all([
+      call("/people/" + p.id + "/restore", "POST", {
+        version: archive.version,
+      }),
+      call("/people/" + p.id + "/restore", "POST", {
+        version: archive.version,
+      }),
+    ]);
+    assert.ok(restoredResults.every((r) => r.status === 200));
+    assert.equal(restoredResults.filter((r) => r.data.changed).length, 1);
+    assert.equal(
+      (
+        await call("/people/" + p.id + "/restore", "POST", {
+          version: archive.version,
+        })
+      ).data.changed,
+      false,
+    );
+    assert.equal(
+      (await call("/audit?action=restore&target=" + p.id)).data.total,
+      1,
+    );
+    assert.equal(
+      (await call("/people/" + p.id)).data.version,
+      beforeDelete.version + 2,
+    );
+    assert.equal(
+      (await call("/people/" + p.id, "DELETE", deletingBody)).status,
+      409,
+    );
+    // Review a deleted record and explicitly confirm restoration through the UI.
+    await page
+      .getByRole("navigation")
+      .getByRole("button", { name: "ทะเบียนผู้ประสบปัญหา" })
+      .click();
+    await page
+      .getByRole("button", { name: "ลบ บุคคลทดสอบ", exact: true })
+      .click();
+    await page
+      .getByLabel("เหตุผลการลบ", { exact: true })
+      .fill("ทดสอบการกู้คืนผ่านหน้าจอ");
+    await page
+      .getByRole("button", { name: "ย้ายเข้าถังขยะ", exact: true })
+      .click();
+    await page
+      .getByRole("dialog", { name: "ย้ายข้อมูลเข้าถังขยะ", exact: true })
+      .waitFor({ state: "hidden" });
+    await page.getByRole("button", { name: "ถังขยะ", exact: true }).click();
+    await page
+      .getByRole("button", {
+        name: "ดูทะเบียนในถังขยะ บุคคลทดสอบ",
+        exact: true,
+      })
+      .click();
+    const trashDetails = page.getByRole("dialog", {
+      name: "ทะเบียนในถังขยะ",
+      exact: true,
+    });
+    await trashDetails
+      .getByText("เหตุผล: ทดสอบการกู้คืนผ่านหน้าจอ", { exact: true })
+      .waitFor();
+    assert.equal(
+      await trashDetails
+        .getByRole("button", { name: "แก้ไขข้อมูล", exact: true })
+        .count(),
+      0,
+    );
+    await page.screenshot({
+      path: "/tmp/bs-sams-trash-details-desktop.png",
+      fullPage: false,
+    });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.screenshot({
+      path: "/tmp/bs-sams-trash-details-mobile.png",
+      fullPage: false,
+    });
+    await page.setViewportSize({ width: 1536, height: 1024 });
+    await trashDetails
+      .getByRole("button", { name: "กู้คืนทะเบียน", exact: true })
+      .click();
+    await page
+      .getByRole("dialog", { name: "ยืนยันกู้คืนทะเบียน", exact: true })
+      .getByRole("button", { name: "ยืนยันกู้คืน", exact: true })
+      .click();
+    await page
+      .getByRole("dialog", { name: "ยืนยันกู้คืนทะเบียน", exact: true })
+      .waitFor({ state: "hidden" });
+    assert.equal((await call("/people/" + p.id)).status, 200);
+    await page
+      .getByRole("main")
+      .getByRole("button", { name: "ทะเบียนผู้ประสบปัญหา", exact: true })
+      .click();
     await call("/users", "POST", {
       username: "qa-staff",
       active: true,
@@ -876,6 +1019,13 @@ try {
     );
     assert.equal((await staffCall("/people/" + p.id, "PUT", p)).status, 403);
     assert.equal((await staffCall("/people/" + p.id)).status, 404);
+    assert.equal((await staffCall("/people/" + p.id + "?trash=1")).status, 404);
+    assert.equal(
+      (await staffCall("/people/" + p.id + "/restore", "POST", { version: 1 }))
+        .status,
+      403,
+    );
+
     assert.equal(
       (await staffCall("/export", "POST", { filters: { q: p.id } })).data
         .length,
@@ -924,6 +1074,25 @@ try {
     }
     const secondPage = await call("/people?q=ทดสอบแบ่งหน้า&page=2&size=10");
     assert.equal(secondPage.data.total, 14);
+    const aggregateRows = (await call("/export", "POST", { filters: {} })).data;
+    assert.deepEqual(
+      (await call("/summary?from=2026-10-01&to=2027-09-30")).data,
+      summarize(aggregateRows, "2026-10-01", "2027-09-30"),
+    );
+    assert.deepEqual(
+      (
+        await staffCall("/report-export", "POST", {
+          from: "2026-10-01",
+          to: "2027-09-30",
+        })
+      ).data,
+      summarize(
+        aggregateRows.filter((p) => p.village === 2),
+        "2026-10-01",
+        "2027-09-30",
+      ),
+    );
+
     assert.equal(secondPage.data.items.length, 4);
     assert.equal((await call("/people?size=1000")).status, 400);
     assert.equal(
@@ -1267,6 +1436,137 @@ try {
     await page
       .getByRole("button", { name: "ละทิ้งการเปลี่ยนแปลง", exact: true })
       .click();
+    const racePassword = crypto.randomUUID();
+    // Concurrent administrator writes cannot silently overwrite each other.
+    assert.equal(
+      (
+        await call("/users", "POST", {
+          username: "qa-race",
+          name: "บัญชีทดสอบการบันทึกพร้อมกัน",
+          role: "staff",
+          permissions: ["view"],
+          villages: [1],
+          active: true,
+          password: racePassword,
+        })
+      ).status,
+      200,
+    );
+    const raceAccount = (await call("/users")).data.find(
+      (u) => u.username === "qa-race",
+    );
+    const raceResults = await Promise.all([
+      call("/users", "PUT", { ...raceAccount, name: "ชื่อจากผู้ดูแลหนึ่ง" }),
+      call("/users", "PUT", { ...raceAccount, name: "ชื่อจากผู้ดูแลสอง" }),
+    ]);
+    assert.deepEqual(raceResults.map((r) => r.status).sort(), [200, 409]);
+    const raceWinner = (await call("/users")).data.find(
+      (u) => u.id === raceAccount.id,
+    );
+    assert.equal(raceWinner.version, raceAccount.version + 1);
+    assert.equal(
+      (await call("/audit?action=update-user&target=" + raceAccount.id)).data
+        .total,
+      1,
+    );
+    await page
+      .getByRole("navigation")
+      .getByRole("button", { name: "จัดการผู้ใช้งาน" })
+      .click();
+    const raceRow = () => page.getByRole("row").filter({ hasText: "qa-race" });
+    await raceRow()
+      .getByRole("button", { name: "แก้ไขสิทธิ์", exact: true })
+      .click();
+    await page
+      .getByLabel("ชื่อแสดงในระบบ", { exact: true })
+      .fill("ฉบับร่างที่ต้องเก็บไว้");
+    assert.equal(
+      (
+        await call("/users", "PUT", {
+          ...raceWinner,
+          name: "ชื่อที่เพิ่งบันทึก",
+        })
+      ).status,
+      200,
+    );
+    const conflictResponse = page.waitForResponse(
+      (r) => r.url().endsWith("/api/users") && r.request().method() === "PUT",
+    );
+    await page
+      .getByRole("button", { name: "บันทึกบัญชี", exact: true })
+      .click();
+    assert.equal((await conflictResponse).status(), 409);
+    await page
+      .getByRole("dialog")
+      .getByText("บัญชีมีการเปลี่ยนแปลงแล้ว", { exact: false })
+      .waitFor();
+    assert.equal(
+      await page.getByLabel("ชื่อแสดงในระบบ", { exact: true }).inputValue(),
+      "ฉบับร่างที่ต้องเก็บไว้",
+    );
+    await page.screenshot({
+      path: "/tmp/bs-sams-account-conflict-desktop.png",
+    });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.screenshot({ path: "/tmp/bs-sams-account-conflict-mobile.png" });
+    await page.setViewportSize({ width: 1536, height: 1024 });
+    await page.getByRole("button", { name: "ยกเลิก", exact: true }).click();
+    await page
+      .getByRole("button", { name: "ละทิ้งการเปลี่ยนแปลง", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "โหลดรายชื่อล่าสุด", exact: true })
+      .click();
+    await raceRow().getByText("ชื่อที่เพิ่งบันทึก", { exact: true }).waitFor();
+    // Only one password rotation from the same credential version may succeed.
+    const raceContext = await browser.newContext();
+    assert.equal(
+      (
+        await raceContext.request.post(origin + "/api/login", {
+          data: { username: "qa-race", password: racePassword },
+        })
+      ).status(),
+      200,
+    );
+    const rotations = [crypto.randomUUID(), crypto.randomUUID()];
+    const rotationResults = await Promise.all(
+      rotations.map((password) =>
+        raceContext.request.post(origin + "/api/password", {
+          data: { current: racePassword, password },
+        }),
+      ),
+    );
+    assert.equal(rotationResults.filter((r) => r.status() === 200).length, 1);
+    assert.ok(
+      rotationResults.every((r) => [200, 401, 409].includes(r.status())),
+    );
+    assert.equal(
+      (await call("/audit?action=change-password&target=" + raceAccount.id))
+        .data.total,
+      1,
+    );
+    const rotationResultsAccount = (await call("/users")).data.find(
+      (u) => u.id === raceAccount.id,
+    );
+    assert.equal(rotationResultsAccount.version, raceWinner.version + 2);
+    assert.equal(rotationResultsAccount.mustChange, false);
+    assert.equal(
+      (await raceContext.request.get(origin + "/api/me")).status(),
+      401,
+    );
+    assert.equal(
+      (
+        await raceContext.request.post(origin + "/api/login", {
+          data: {
+            username: "qa-race",
+            password:
+              rotations[rotationResults.findIndex((r) => r.status() === 200)],
+          },
+        })
+      ).status(),
+      200,
+    );
+    await raceContext.close();
     // Password reset is a separate administrator operation and revokes existing sessions.
     const tempPassword = crypto.randomUUID(),
       finalStaffPassword = crypto.randomUUID();
@@ -1378,6 +1678,16 @@ try {
       username: "qa-staff",
       password: finalStaffPassword,
     });
+    const refreshedUsers = page.waitForResponse(
+      (r) => r.url().endsWith("/api/users") && r.request().method() === "GET",
+    );
+    await page
+      .getByRole("button", { name: "โหลดรายชื่อล่าสุด", exact: true })
+      .click();
+    await refreshedUsers;
+    await page
+      .getByRole("button", { name: "โหลดรายชื่อล่าสุด", exact: true })
+      .waitFor();
     const userRow = () =>
       page.getByRole("row").filter({
         has: page.getByRole("cell", { name: "qa-staff", exact: true }),
@@ -1435,6 +1745,21 @@ try {
     });
     assert.equal(reactivated.status, 200);
     assert.deepEqual(reactivated.data.villages, [2]);
+    // Rejected stale writes must leave the current session and password intact.
+    assert.equal(
+      (await call("/users", "PUT", { ...staffRecord, active: false })).status,
+      409,
+    );
+    assert.equal(
+      (
+        await call("/users/" + staffId + "/reset-password", "POST", {
+          password: tempPassword,
+          version: staffRecord.version,
+        })
+      ).status,
+      409,
+    );
+    assert.equal((await staffCall("/me")).status, 200);
     const resetAudit = await call(
       "/audit?action=reset-password&target=" + staffId,
     );
@@ -1542,7 +1867,7 @@ try {
 
     assert.deepEqual(errors, []);
     console.log(
-      "PASS: isolated Worker/D1, login, forced and self-service password changes, all-device session revocation, server-side filters/pagination and full filtered Excel export, person/request/payment form with unsaved-change confirmation and draft removal, saved-history protection, unsaved settings navigation/logout and account close confirmations, scoped duplicate warnings with preserved draft previews, advanced age/disability/request-date filters, minimal registry data and fresh authorized person details, exact satang totals and numeric Excel cells, admin password reset and account deactivation/reactivation, paginated Thai audit filters and admin-only access, optimistic locking with accurate audit, mixed request statuses, Excel download, trash/restore, staff authorization, desktop/mobile layout, console health",
+      "PASS: isolated Worker/D1, login, forced and self-service password changes, all-device session revocation, server-side filters/pagination and full filtered Excel export, person/request/payment form with unsaved-change confirmation and draft removal, saved-history protection, concurrent/idempotent trash lifecycle and archive review, unsaved settings navigation/logout and account close confirmations, scoped duplicate warnings with preserved draft previews, advanced age/disability/request-date filters, minimal registry data and fresh authorized person details, exact satang totals and numeric Excel cells, admin password reset and account deactivation/reactivation, paginated Thai audit filters and admin-only access, optimistic locking with accurate audit, mixed request statuses, Excel download, trash/restore, staff authorization, desktop/mobile layout, console health",
     );
   } finally {
     await browser.close();

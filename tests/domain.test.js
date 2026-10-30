@@ -1,10 +1,10 @@
+import { summarize } from "./helpers/reference-summary.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
   age,
   fiscalRange,
   personStatus,
-  summarize,
   validateReportRange,
   validatePerson,
   validatePersonUpdate,

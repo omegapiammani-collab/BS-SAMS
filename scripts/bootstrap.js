@@ -12,7 +12,7 @@ const path = join(tmpdir(), `bs-sams-${crypto.randomUUID()}.sql`);
 const hash = await hashPassword(password);
 writeFileSync(
   path,
-  `INSERT OR IGNORE INTO users VALUES('admin','admin','ผู้ดูแลระบบ','${hash}','admin','[]','[]',1,1);`,
+  `INSERT OR IGNORE INTO users(id,username,name,password,role,permissions,villages,must_change,active) VALUES('admin','admin','ผู้ดูแลระบบ','${hash}','admin','[]','[]',1,1);`,
   { mode: 0o600 },
 );
 try {

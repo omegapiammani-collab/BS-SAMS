@@ -158,6 +158,7 @@ test("registry list serialization excludes full case and identity details", asyn
       ],
     }),
   });
+  assert.equal(list.version, 2);
   assert.equal(list.status, "partial");
   assert.equal(list.categoryStatuses[0], "partial");
   assert.equal(list.categoryStatuses[1], "none");
@@ -170,7 +171,6 @@ test("registry list serialization excludes full case and identity details", asyn
     "disabilities",
     "requests",
     "data",
-    "version",
   ])
     assert.equal(Object.hasOwn(list, field), false);
   assert.equal(JSON.stringify(list).includes("private"), false);

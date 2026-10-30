@@ -40,7 +40,12 @@ export function validateAccount(b, config, creating) {
     return "รหัสผ่านชั่วคราวต้องมี 12–128 ตัวอักษร";
   if (!creating && b.password)
     return "กรุณาใช้ปุ่มรีเซ็ตรหัสผ่านแยกจากการแก้ไขสิทธิ์";
+  if (!creating && !validAccountVersion(b.version))
+    return "กรุณาโหลดข้อมูลบัญชีล่าสุดก่อนบันทึก";
   return null;
 }
 export const validPassword = (value) =>
   typeof value === "string" && value.length >= 12 && value.length <= 128;
+
+export const validAccountVersion = (value) =>
+  Number.isSafeInteger(value) && value >= 1;

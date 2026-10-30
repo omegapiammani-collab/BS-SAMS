@@ -1,6 +1,12 @@
+import { readSummary } from "./summary.js";
+import { lifecyclePlan, desiredState } from "./lifecycle.js";
 import { findDuplicates } from "./duplicates.js";
 import { cleanConfig } from "./config.js";
-import { validateAccount, validPassword } from "./accounts.js";
+import {
+  validateAccount,
+  validPassword,
+  validAccountVersion,
+} from "./accounts.js";
 import { listAudit } from "./audit.js";
 import {
   parsePeopleQuery,
@@ -11,7 +17,6 @@ import {
 } from "./people.js";
 import {
   defaultConfig,
-  summarize,
   validateReportRange,
   validatePerson,
   validatePersonUpdate,
@@ -139,13 +144,19 @@ export default {
           b.password === b.current
         )
           return fail("ใช้รหัสผ่านใหม่ 12–128 ตัวอักษร");
-        await db.batch([
+        const result = await db.batch([
           db
-            .prepare("UPDATE users SET password=?,must_change=0 WHERE id=?")
-            .bind(await hashPassword(b.password), u.id),
-          db.prepare("DELETE FROM sessions WHERE user_id=?").bind(u.id),
-          audit(db, u, "change-password", u.id),
+            .prepare(
+              "UPDATE users SET password=?,must_change=0,version=version+1 WHERE id=? AND version=?",
+            )
+            .bind(await hashPassword(b.password), u.id, row.version),
+          audit(db, u, "change-password", u.id, true),
+          db
+            .prepare("DELETE FROM sessions WHERE user_id=? AND changes()>0")
+            .bind(u.id),
         ]);
+        if (!result[0].meta.changes)
+          return fail("บัญชีมีการเปลี่ยนแปลงแล้ว กรุณาเข้าสู่ระบบใหม่", 409);
         return json({ ok: true }, 200, {
           "Set-Cookie":
             "session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0",
@@ -181,24 +192,12 @@ export default {
         }
         return fail("ไม่มีสิทธิ์", 403);
       }
-      const all = async () => {
-        const result = await db.prepare("SELECT * FROM people").all();
-        return result.results.map((p) => ({
-          ...JSON.parse(p.data),
-          id: p.id,
-          version: p.version,
-          deletedAt: p.deleted_at,
-          deletedBy: p.deleted_by,
-          deleteReason: p.delete_reason,
-        }));
-      };
       if (path === "/api/summary" && method === "GET") {
         const from = url.searchParams.get("from"),
           to = url.searchParams.get("to");
         const error = validateReportRange(from, to);
         if (error) return fail(error);
-        const list = (await all()).filter((p) => !p.deletedAt);
-        return json(summarize(list, from, to));
+        return json(await readSummary(db, from, to));
       }
       if (path === "/api/report-export" && method === "POST") {
         const { from, to } = await request.json();
@@ -211,11 +210,7 @@ export default {
           return fail("ไม่มีสิทธิ์ส่งออกรายงาน", 403);
         const query = parsePeopleQuery(new URLSearchParams());
         const selection = peopleSelection(u, query, true);
-        const rows = await db
-          .prepare(`SELECT * FROM people WHERE ${selection.where}`)
-          .bind(...selection.args)
-          .all();
-        const summary = summarize(rows.results.map(personFromRow), from, to);
+        const summary = await readSummary(db, from, to, selection);
         await audit(db, u, "export-report", "summary").run();
         return json(summary);
       }
@@ -282,24 +277,89 @@ export default {
             .first();
         if (!stored) return fail("ไม่พบข้อมูล", 404);
         const old = JSON.parse(stored.data);
-        if (method === "POST" && match[2] && u.role === "admin") {
-          await db.batch([
-            db
-              .prepare(
-                "UPDATE people SET deleted_at=NULL,deleted_by=NULL,delete_reason=NULL,version=version+1 WHERE id=?",
-              )
-              .bind(id),
-            audit(db, u, "restore", id),
+        const operation =
+          method === "DELETE" && !match[2]
+            ? "delete"
+            : method === "POST" && match[2]
+              ? "restore"
+              : null;
+        if (operation) {
+          if (operation === "restore" && u.role !== "admin")
+            return fail("ไม่มีสิทธิ์", 403);
+          if (
+            operation === "delete" &&
+            (!allowed(u, "view", stored.village) ||
+              !allowed(u, "delete", stored.village))
+          )
+            return fail("ไม่มีสิทธิ์", 403);
+          const plan = lifecyclePlan(stored, operation, await request.json());
+          if (plan.error) return fail(plan.error, plan.status);
+          if (plan.unchanged)
+            return json({ ok: true, changed: false, version: stored.version });
+          const mutation =
+            operation === "delete"
+              ? db
+                  .prepare(
+                    "UPDATE people SET deleted_at=?,deleted_by=?,delete_reason=?,version=version+1 WHERE id=? AND version=? AND deleted_at IS NULL",
+                  )
+                  .bind(
+                    new Date().toISOString(),
+                    u.username,
+                    plan.reason,
+                    id,
+                    plan.version,
+                  )
+              : db
+                  .prepare(
+                    "UPDATE people SET deleted_at=NULL,deleted_by=NULL,delete_reason=NULL,version=version+1 WHERE id=? AND version=? AND deleted_at IS NOT NULL",
+                  )
+                  .bind(id, plan.version);
+          const result = await db.batch([
+            mutation,
+            audit(
+              db,
+              u,
+              operation === "delete" ? "delete-person" : "restore",
+              id,
+              true,
+            ),
           ]);
-          return json({ ok: true });
+          if (result[0].meta.changes)
+            return json({
+              ok: true,
+              changed: true,
+              version: stored.version + 1,
+            });
+          const fresh = await db
+            .prepare("SELECT version,deleted_at,village FROM people WHERE id=?")
+            .bind(id)
+            .first();
+          if (!fresh) return fail("ไม่พบข้อมูล", 404);
+          if (
+            operation === "delete" &&
+            (!allowed(u, "view", fresh.village) ||
+              !allowed(u, "delete", fresh.village))
+          )
+            return fail("ไม่มีสิทธิ์", 403);
+          if (desiredState(fresh, operation))
+            return json({ ok: true, changed: false, version: fresh.version });
+          return fail(
+            "ข้อมูลเปลี่ยนแปลงแล้ว กรุณาโหลดรายการล่าสุดก่อนทำรายการ",
+            409,
+          );
         }
         if (method === "GET" && !match[2]) {
-          if (stored.deleted_at || !allowed(u, "view", stored.village))
+          const archive = url.searchParams.get("trash") === "1";
+          if (
+            archive
+              ? u.role !== "admin" || !stored.deleted_at
+              : stored.deleted_at || !allowed(u, "view", stored.village)
+          )
             return fail("ไม่พบข้อมูล", 404);
           return json(personFromRow(stored));
         }
         if (stored.deleted_at) return fail("ข้อมูลอยู่ในถังขยะ", 404);
-        if (method === "PUT") {
+        if (method === "PUT" && !match[2]) {
           const p = await request.json();
           if (!p || typeof p !== "object" || Array.isArray(p))
             return fail("ข้อมูลบุคคลไม่ถูกต้อง");
@@ -341,24 +401,6 @@ export default {
             return fail("มีผู้แก้ไขข้อมูลแล้ว กรุณาโหลดใหม่", 409);
           return json({ ...p, version: p.version + 1 });
         }
-        if (method === "DELETE") {
-          if (
-            !allowed(u, "delete", stored.village) ||
-            !allowed(u, "view", stored.village)
-          )
-            return fail("ไม่มีสิทธิ์", 403);
-          const b = await request.json();
-          if (!b.reason?.trim()) return fail("กรุณาระบุเหตุผล");
-          await db.batch([
-            db
-              .prepare(
-                "UPDATE people SET deleted_at=?,deleted_by=?,delete_reason=?,version=version+1 WHERE id=?",
-              )
-              .bind(new Date().toISOString(), u.username, b.reason, id),
-            audit(db, u, "delete-person", id),
-          ]);
-          return json({ ok: true });
-        }
       }
       const resetMatch = path.match(/^\/api\/users\/([^/]+)\/reset-password$/);
       if (resetMatch && u.role === "admin" && method === "POST") {
@@ -375,14 +417,25 @@ export default {
         if (!target) return fail("ไม่พบบัญชีผู้ใช้งาน", 404);
         if (!target.active)
           return fail("กรุณาเปิดใช้งานบัญชีก่อนรีเซ็ตรหัสผ่าน", 409);
+        if (!validAccountVersion(body.version))
+          return fail("กรุณาโหลดข้อมูลบัญชีล่าสุดก่อนรีเซ็ตรหัสผ่าน");
         const hash = await hashPassword(body.password);
-        await db.batch([
+        const result = await db.batch([
           db
-            .prepare("UPDATE users SET password=?,must_change=1 WHERE id=?")
-            .bind(hash, id),
-          db.prepare("DELETE FROM sessions WHERE user_id=?").bind(id),
-          audit(db, u, "reset-password", id),
+            .prepare(
+              "UPDATE users SET password=?,must_change=1,version=version+1 WHERE id=? AND version=? AND active=1",
+            )
+            .bind(hash, id, body.version),
+          audit(db, u, "reset-password", id, true),
+          db
+            .prepare("DELETE FROM sessions WHERE user_id=? AND changes()>0")
+            .bind(id),
         ]);
+        if (!result[0].meta.changes)
+          return fail(
+            "บัญชีมีการเปลี่ยนแปลงแล้ว กรุณาโหลดรายชื่อล่าสุดก่อนรีเซ็ตรหัสผ่าน",
+            409,
+          );
         return json({ ok: true });
       }
       if (path === "/api/users" && u.role === "admin") {
@@ -417,7 +470,9 @@ export default {
             if (!b.password) return fail("กรุณากำหนดรหัสผ่านชั่วคราว");
             await db.batch([
               db
-                .prepare("INSERT INTO users VALUES(?,?,?,?,?,?,?,1,?)")
+                .prepare(
+                  "INSERT INTO users(id,username,name,password,role,permissions,villages,must_change,active) VALUES(?,?,?,?,?,?,?,1,?)",
+                )
                 .bind(
                   id,
                   b.username,
@@ -431,10 +486,10 @@ export default {
               audit(db, u, "create-user", id),
             ]);
           } else {
-            await db.batch([
+            const result = await db.batch([
               db
                 .prepare(
-                  "UPDATE users SET username=?,name=?,role=?,permissions=?,villages=?,active=? WHERE id=?",
+                  "UPDATE users SET username=?,name=?,role=?,permissions=?,villages=?,active=?,version=version+1 WHERE id=? AND version=?",
                 )
                 .bind(
                   b.username,
@@ -444,10 +499,18 @@ export default {
                   JSON.stringify(b.villages),
                   b.active ? 1 : 0,
                   id,
+                  b.version,
                 ),
-              db.prepare("DELETE FROM sessions WHERE user_id=?").bind(id),
-              audit(db, u, "update-user", id),
+              audit(db, u, "update-user", id, true),
+              db
+                .prepare("DELETE FROM sessions WHERE user_id=? AND changes()>0")
+                .bind(id),
             ]);
+            if (!result[0].meta.changes)
+              return fail(
+                "บัญชีมีการเปลี่ยนแปลงแล้ว กรุณาโหลดรายชื่อล่าสุดก่อนบันทึก",
+                409,
+              );
           }
           return json({ ok: true });
         }
