@@ -493,19 +493,6 @@ try {
       }),
       false,
     );
-    assert.equal(
-      (await call("/people/" + p.id, "PUT", { ...p, requests: [] })).status,
-      400,
-    );
-    assert.equal(
-      (
-        await call("/people/" + p.id, "PUT", {
-          ...p,
-          requests: [{ ...p.requests[0], status: "progress", payments: [] }],
-        })
-      ).status,
-      400,
-    );
     await page
       .getByRole("button", { name: "แก้ไข บุคคลทดสอบ", exact: true })
       .click();
@@ -535,38 +522,35 @@ try {
       .getByRole("button", { name: "ไปที่คำขอที่ 1", exact: true })
       .click();
     await page.getByRole("heading", { name: /คำขอที่ 1/ }).waitFor();
-    await page
-      .getByRole("button", { name: "ยื่นคำขอประเภทนี้อีกครั้ง", exact: true })
-      .click();
     assert.equal(
       await page
-        .getByLabel("ประเภทความช่วยเหลือ *", { exact: true })
-        .inputValue(),
-      p.requests[0].type,
+        .getByRole("button", { name: "ยื่นคำขอประเภทนี้อีกครั้ง", exact: true })
+        .count(),
+      0,
     );
-    assert.equal(
-      await page.getByLabel("หมวดหมู่", { exact: true }).isDisabled(),
-      true,
-    );
-    assert.equal(
-      await page.getByLabel("หมวดหมู่", { exact: true }).inputValue(),
-      p.requests[0].category,
-    );
-    assert.equal(await page.locator(".request-card .payment").count(), 0);
+    await page
+      .getByRole("button", {
+        name: "ลบการช่วยเหลือครั้งที่ 1 ในคำขอที่ 1",
+        exact: true,
+      })
+      .click();
+    await page.getByRole("button", { name: "ยืนยันลบ", exact: true }).click();
     assert.equal(
       await page.getByLabel("สถานะ", { exact: true }).inputValue(),
       "pending",
     );
-    assert.equal(await page.locator(".request-tile").count(), 2);
+    assert.equal(await page.locator(".request-card .payment").count(), 0);
+    await page.getByRole("button", { name: "ยกเลิก", exact: true }).click();
     await page
-      .getByRole("button", { name: "ลบคำขอที่ 2 ที่ยังไม่บันทึก", exact: true })
+      .getByRole("button", { name: "ละทิ้งการเปลี่ยนแปลง", exact: true })
       .click();
     await page
-      .getByRole("button", { name: "ลบรายการใหม่", exact: true })
+      .getByRole("button", { name: "แก้ไข บุคคลทดสอบ", exact: true })
       .click();
-    assert.equal(await page.locator(".request-tile").count(), 1);
+    await page
+      .getByRole("button", { name: "ไปที่คำขอที่ 1", exact: true })
+      .click();
     assert.equal(await page.locator(".request-card .payment").count(), 1);
-
     assert.equal(await page.locator(".request-card").count(), 1);
     await page.screenshot({
       path: "/tmp/bs-sams-request-editor-desktop.png",
@@ -1402,6 +1386,40 @@ try {
         })
       ).status,
       200,
+    );
+
+    const deleteFixture = await call("/people", "POST", {
+      ...p,
+      nationalId: "",
+      requests: [{ ...p.requests[0], id: crypto.randomUUID() }],
+    });
+    assert.equal(deleteFixture.status, 201);
+    const deletePerson = deleteFixture.data;
+    const requestId = deletePerson.requests[0].id;
+    const paymentId = deletePerson.requests[0].payments[0].id;
+    const withoutPayment = await call("/people/" + deletePerson.id, "PUT", {
+      ...deletePerson,
+      requests: [
+        { ...deletePerson.requests[0], status: "pending", payments: [] },
+      ],
+    });
+    assert.equal(withoutPayment.status, 200);
+    assert.equal(withoutPayment.data.requests[0].payments.length, 0);
+    const withoutRequest = await call("/people/" + deletePerson.id, "PUT", {
+      ...withoutPayment.data,
+      requests: [],
+    });
+    assert.equal(withoutRequest.status, 200);
+    assert.equal(withoutRequest.data.requests.length, 0);
+    assert.equal(
+      (await call("/audit?action=delete-assistance&target=" + paymentId)).data
+        .total,
+      1,
+    );
+    assert.equal(
+      (await call("/audit?action=delete-request&target=" + requestId)).data
+        .total,
+      1,
     );
     await page.reload();
     await page

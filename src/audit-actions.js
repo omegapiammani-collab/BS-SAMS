@@ -1,6 +1,8 @@
 export const auditActions = {
   "create-person": "เพิ่มทะเบียนบุคคล",
   "update-person": "แก้ไขทะเบียนบุคคล",
+  "delete-request": "ลบคำขอความช่วยเหลือ",
+  "delete-assistance": "ลบประวัติการช่วยเหลือ",
   "delete-person": "ย้ายทะเบียนเข้าถังขยะ",
   restore: "กู้คืนทะเบียนบุคคล",
   export: "ส่งออกทะเบียนบุคคล",

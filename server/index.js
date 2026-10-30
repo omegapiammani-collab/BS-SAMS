@@ -14,6 +14,7 @@ import {
   validateReportRange,
   validatePerson,
   validatePersonUpdate,
+  removedPersonRecords,
 } from "../src/domain.js";
 import { hashPassword, verifyPassword, safeUser, allowed } from "./auth.js";
 const json = (data, status = 200, headers = {}) =>
@@ -313,6 +314,12 @@ export default {
             return fail("มีผู้แก้ไขข้อมูลแล้ว กรุณาโหลดใหม่", 409);
           const historyError = validatePersonUpdate(p, old);
           if (historyError) return fail(historyError);
+          const removed = removedPersonRecords(p, old);
+          if (
+            (removed.requests.length || removed.payments.length) &&
+            !allowed(u, "delete", stored.village)
+          )
+            return fail("ไม่มีสิทธิ์ลบคำขอหรือประวัติการช่วยเหลือ", 403);
           const result = await db.batch([
             db
               .prepare(
@@ -326,6 +333,12 @@ export default {
                 p.version,
               ),
             audit(db, u, "update-person", id, true),
+            ...removed.requests.map((target) =>
+              audit(db, u, "delete-request", target, true),
+            ),
+            ...removed.payments.map((target) =>
+              audit(db, u, "delete-assistance", target, true),
+            ),
           ]);
           if (!result[0].meta.changes)
             return fail("มีผู้แก้ไขข้อมูลแล้ว กรุณาโหลดใหม่", 409);

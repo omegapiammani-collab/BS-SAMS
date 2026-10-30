@@ -1735,14 +1735,6 @@ summary {
   font-weight: 400;
   color: #526174;
 }
-.request-repeat {
-  margin: 0 0 16px 8px;
-}
-@media (max-width: 600px) {
-  .request-repeat {
-    margin-left: 0;
-  }
-}
 .thai-date-control {
   position: relative;
   width: 100%;

@@ -347,17 +347,25 @@ export function validatePerson(p, config, today = thailandDate(), previous) {
   return null;
 }
 
+export function removedPersonRecords(next, previous) {
+  const current = new Map(next.requests.map((r) => [r.id, r]));
+  const requests = [];
+  const payments = [];
+  for (const old of previous.requests) {
+    const retained = current.get(old.id);
+    if (!retained) requests.push(old.id);
+    const ids = new Set(retained?.payments.map((payment) => payment.id));
+    for (const payment of old.payments)
+      if (!ids.has(payment.id)) payments.push(payment.id);
+  }
+  return { requests, payments };
+}
 export function validatePersonUpdate(next, previous) {
   const requests = new Map(next.requests.map((r) => [r.id, r]));
   for (const old of previous.requests) {
     const current = requests.get(old.id);
-    if (!current)
-      return "ไม่สามารถลบคำขอที่บันทึกแล้ว กรุณาเปลี่ยนสถานะพร้อมเหตุผลแทน";
-    if (current.category !== old.category)
+    if (current && current.category !== old.category)
       return "ไม่สามารถเปลี่ยนหมวดหมู่ของคำขอที่บันทึกแล้ว";
-    const payments = new Set(current.payments.map((p) => p.id));
-    if (old.payments.some((p) => !payments.has(p.id)))
-      return "ไม่สามารถลบประวัติการช่วยเหลือที่บันทึกแล้ว";
   }
   return null;
 }

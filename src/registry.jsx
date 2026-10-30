@@ -1,3 +1,4 @@
+import { orderRequests } from "./request-order.js";
 import { formatThaiDate } from "./thai-date.js";
 import React, { useEffect, useState, useRef } from "react";
 import {
@@ -613,14 +614,14 @@ function PersonEditor({ person, readonly, config, user, onClose, onSaved }) {
     heading?.focus();
     heading?.scrollIntoView({ block: "start", behavior: "smooth" });
   }, [activeRequest]);
-  function addRequest(previous) {
+  function addRequest(category) {
     const id = crypto.randomUUID();
     update("requests", [
       ...p.requests,
       {
         id,
-        category: previous?.category ?? "0",
-        type: previous?.type ?? "",
+        category,
+        type: "",
         note: "",
         date: today(),
         status: "pending",
@@ -639,6 +640,10 @@ function PersonEditor({ person, readonly, config, user, onClose, onSaved }) {
       errorRef.current?.focus();
     }
   }, [error]);
+  const canDeleteSaved =
+    user.role === "admin" ||
+    (user.permissions.includes("delete") &&
+      user.villages.includes(Number(person.village)));
   const savedRequests = new Set(person.requests.map((r) => r.id));
   const savedPayments = new Set(
     person.requests.flatMap((r) => r.payments.map((x) => x.id)),
@@ -665,7 +670,14 @@ function PersonEditor({ person, readonly, config, user, onClose, onSaved }) {
         "requests",
         p.requests.map((r) =>
           r.id === confirm.request
-            ? { ...r, payments: r.payments.filter((x) => x.id !== confirm.id) }
+            ? {
+                ...r,
+                payments: r.payments.filter((x) => x.id !== confirm.id),
+                status:
+                  r.status === "done" && r.payments.length === 1
+                    ? "pending"
+                    : r.status,
+              }
             : r,
         ),
       );
@@ -840,8 +852,10 @@ function PersonEditor({ person, readonly, config, user, onClose, onSaved }) {
               id="request-summary"
             >
               {categories.map((category, categoryIndex) => {
-                const requests = p.requests.filter(
-                  (r) => Number(r.category) === categoryIndex,
+                const requests = orderRequests(
+                  p.requests.filter(
+                    (r) => Number(r.category) === categoryIndex,
+                  ),
                 );
                 return (
                   <details className="request-group" key={category} open>
@@ -854,9 +868,7 @@ function PersonEditor({ person, readonly, config, user, onClose, onSaved }) {
                         <button
                           type="button"
                           aria-label={`เพิ่มคำขอ ${category}`}
-                          onClick={() =>
-                            addRequest({ category: String(categoryIndex) })
-                          }
+                          onClick={() => addRequest(String(categoryIndex))}
                         >
                           <Plus size={16} />
                           เพิ่มคำขอ
@@ -865,13 +877,13 @@ function PersonEditor({ person, readonly, config, user, onClose, onSaved }) {
                     )}
                     {requests.length ? (
                       <div className="request-grid">
-                        {requests.map((r) => {
+                        {requests.map((r, position) => {
                           const index = p.requests.findIndex(
                             (x) => x.id === r.id,
                           );
                           const total = sumMoney(r.payments);
-                          const occurrence = p.requests
-                            .slice(0, index + 1)
+                          const occurrence = requests
+                            .slice(0, position + 1)
                             .filter(
                               (x) =>
                                 x.category === r.category && x.type === r.type,
@@ -970,19 +982,26 @@ function PersonEditor({ person, readonly, config, user, onClose, onSaved }) {
                       <span className={"badge " + r.status}>
                         {statuses[r.status]}
                       </span>
-                      {!readonly && !savedRequests.has(r.id) && (
-                        <button
-                          type="button"
-                          className="danger"
-                          aria-label={`ลบคำขอที่ ${index + 1} ที่ยังไม่บันทึก`}
-                          onClick={() =>
-                            setConfirm({ kind: "request", id: r.id })
-                          }
-                        >
-                          <Trash2 size={15} />
-                          ลบรายการใหม่
-                        </button>
-                      )}
+                      {!readonly &&
+                        (canDeleteSaved || !savedRequests.has(r.id)) && (
+                          <button
+                            type="button"
+                            className="danger"
+                            aria-label={`ลบคำขอที่ ${index + 1}${savedRequests.has(r.id) ? "" : " ที่ยังไม่บันทึก"}`}
+                            onClick={() =>
+                              setConfirm({
+                                kind: "request",
+                                id: r.id,
+                                saved: savedRequests.has(r.id),
+                              })
+                            }
+                          >
+                            <Trash2 size={15} />
+                            {savedRequests.has(r.id)
+                              ? "ลบคำขอ"
+                              : "ลบรายการใหม่"}
+                          </button>
+                        )}
                     </div>
                   </div>
                   <button
@@ -998,16 +1017,6 @@ function PersonEditor({ person, readonly, config, user, onClose, onSaved }) {
                     <ChevronLeft size={16} />
                     กลับไปสรุปคำขอ
                   </button>
-                  {!readonly && r.type.trim() && (
-                    <button
-                      type="button"
-                      className="request-repeat"
-                      onClick={() => addRequest(r)}
-                    >
-                      <Plus size={16} />
-                      ยื่นคำขอประเภทนี้อีกครั้ง
-                    </button>
-                  )}
                   <p className="muted">
                     แต่ละวันที่ยื่นให้สร้างคำขอใหม่
                     คำขอแต่ละรายการบันทึกการช่วยเหลือได้หนึ่งครั้ง
@@ -1094,24 +1103,28 @@ function PersonEditor({ person, readonly, config, user, onClose, onSaved }) {
                       {r.payments.map((x, i) => (
                         <div className="payment" key={x.id}>
                           <div className="panel-title">
-                            <strong>ครั้งที่ {i + 1}</strong>
-                            {!readonly && !savedPayments.has(x.id) && (
-                              <button
-                                type="button"
-                                className="danger"
-                                aria-label={`ลบการช่วยเหลือครั้งที่ ${i + 1} ในคำขอที่ ${index + 1} ที่ยังไม่บันทึก`}
-                                onClick={() =>
-                                  setConfirm({
-                                    kind: "payment",
-                                    id: x.id,
-                                    request: r.id,
-                                  })
-                                }
-                              >
-                                <Trash2 size={15} />
-                                ลบรายการใหม่
-                              </button>
-                            )}
+                            <strong>ประวัติการช่วยเหลือ</strong>
+                            {!readonly &&
+                              (canDeleteSaved || !savedPayments.has(x.id)) && (
+                                <button
+                                  type="button"
+                                  className="danger"
+                                  aria-label={`ลบการช่วยเหลือครั้งที่ ${i + 1} ในคำขอที่ ${index + 1}${savedPayments.has(x.id) ? "" : " ที่ยังไม่บันทึก"}`}
+                                  onClick={() =>
+                                    setConfirm({
+                                      kind: "payment",
+                                      id: x.id,
+                                      request: r.id,
+                                      saved: savedPayments.has(x.id),
+                                    })
+                                  }
+                                >
+                                  <Trash2 size={15} />
+                                  {savedPayments.has(x.id)
+                                    ? "ลบประวัติการช่วยเหลือ"
+                                    : "ลบรายการใหม่"}
+                                </button>
+                              )}
                           </div>
                           <div className="form-grid">
                             {[
@@ -1230,10 +1243,18 @@ function PersonEditor({ person, readonly, config, user, onClose, onSaved }) {
           description={
             confirm.kind === "close"
               ? "ข้อมูลที่แก้ไขในแบบฟอร์มนี้จะไม่ถูกบันทึก ต้องการละทิ้งการเปลี่ยนแปลงหรือไม่?"
-              : "รายการนี้ยังไม่ถูกบันทึกในระบบ ต้องการลบออกจากแบบฟอร์มหรือไม่?"
+              : confirm.saved
+                ? confirm.kind === "request"
+                  ? "คำขอและประวัติการช่วยเหลือของคำขอนี้จะถูกลบเมื่อกดบันทึกข้อมูล ต้องการลบหรือไม่?"
+                  : "ประวัติการช่วยเหลือนี้จะถูกลบเมื่อกดบันทึกข้อมูล หากไม่เหลือประวัติ สถานะช่วยเหลือแล้วจะกลับเป็นยังไม่ได้ดำเนินการ ต้องการลบหรือไม่?"
+                : "รายการนี้ยังไม่ถูกบันทึกในระบบ ต้องการลบออกจากแบบฟอร์มหรือไม่?"
           }
           confirmText={
-            confirm.kind === "close" ? "ละทิ้งการเปลี่ยนแปลง" : "ลบรายการใหม่"
+            confirm.kind === "close"
+              ? "ละทิ้งการเปลี่ยนแปลง"
+              : confirm.saved
+                ? "ยืนยันลบ"
+                : "ลบรายการใหม่"
           }
           onCancel={() => setConfirm(null)}
           onConfirm={discard}

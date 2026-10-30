@@ -8,6 +8,7 @@ import {
   validateReportRange,
   validatePerson,
   validatePersonUpdate,
+  removedPersonRecords,
   defaultConfig,
 } from "../src/domain.js";
 import { allowed, hashPassword, verifyPassword } from "../server/auth.js";
@@ -171,12 +172,12 @@ test("actual recipients include prior-year requests and repeated payments count 
   assert.equal(s.monthly[0].helpedPeople, 1);
 });
 
-test("saved request and payment history cannot be dropped during an edit", () => {
+test("request and payment deletion is allowed while category locking remains", () => {
   const previous = { requests: [{ id: "r1", payments: [{ id: "p1" }] }] };
-  assert.match(validatePersonUpdate({ requests: [] }, previous), /คำขอ/);
-  assert.match(
+  assert.equal(validatePersonUpdate({ requests: [] }, previous), null);
+  assert.equal(
     validatePersonUpdate({ requests: [{ id: "r1", payments: [] }] }, previous),
-    /ประวัติ/,
+    null,
   );
   assert.equal(
     validatePersonUpdate(
@@ -296,5 +297,18 @@ test("one assistance event per request preserves legacy history without allowing
   const single = structuredClone(previous);
   single.requests[0].payments = [payment];
   assert.equal(validatePerson(single, defaultConfig, "2026-10-31"), null);
-  assert.match(validatePersonUpdate(single, previous), /ประวัติ/);
+  assert.equal(validatePersonUpdate(single, previous), null);
+});
+
+test("deletion tracking includes assistance within a removed request", () => {
+  const old = {
+    requests: [
+      { id: "r1", payments: [{ id: "p1" }] },
+      { id: "r2", payments: [{ id: "p2" }] },
+    ],
+  };
+  assert.deepEqual(
+    removedPersonRecords({ requests: [{ id: "r2", payments: [] }] }, old),
+    { requests: ["r1"], payments: ["p1", "p2"] },
+  );
 });
