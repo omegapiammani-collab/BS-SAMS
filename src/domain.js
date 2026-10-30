@@ -1,3 +1,4 @@
+import { toSatang, validMoney, thailandDate } from "./money.js";
 export const villageNames = [
   "ทรายมูล",
   "จำค่า",
@@ -102,10 +103,10 @@ export function personStatus(p) {
   const r = p.requests || [];
   if (!r.length) return "none";
   const open = r.filter((x) => !closed.includes(x.status));
-  if (open.length && open.every((x) => x.status === "done")) return "done";
+  if (r.every((x) => x.status === "done")) return "done";
+  if (!open.length) return "closed";
   if (r.some((x) => x.status === "done" || x.payments?.length))
     return "partial";
-  if (!open.length) return "closed";
   if (open.some((x) => x.status === "progress")) return "progress";
   return "pending";
 }
@@ -123,8 +124,48 @@ export function validNationalId(id) {
   for (let i = 0; i < 12; i++) n += Number(id[i]) * (13 - i);
   return (11 - (n % 11)) % 10 === Number(id[12]);
 }
+export function validateReportRange(from, to) {
+  if (!isDate(from) || !isDate(to) || from > to)
+    return "กรุณาระบุช่วงวันที่ให้ถูกต้อง";
+  const months =
+    (Number(to.slice(0, 4)) - Number(from.slice(0, 4))) * 12 +
+    Number(to.slice(5, 7)) -
+    Number(from.slice(5, 7)) +
+    1;
+  if (months > 120) return "เลือกช่วงรายงานได้ไม่เกิน 120 เดือน";
+  return null;
+}
+export function monthLabel(month) {
+  return new Intl.DateTimeFormat("th-TH", {
+    month: "short",
+    year: "numeric",
+    timeZone: "Asia/Bangkok",
+  }).format(new Date(month + "-01T00:00:00Z"));
+}
 export function summarize(people, from, to) {
-  const within = (d) => (!from || d >= from) && (!to || d <= to);
+  const within = (d) => d >= from && d <= to;
+  const monthly = [];
+  let year = Number(from.slice(0, 4)),
+    month = Number(from.slice(5, 7));
+  while (`${year}-${String(month).padStart(2, "0")}` <= to.slice(0, 7)) {
+    monthly.push({
+      month: `${year}-${String(month).padStart(2, "0")}`,
+      requested: 0,
+      helped: 0,
+      requestedPeople: 0,
+      helpedPeople: 0,
+      amount: 0,
+    });
+    month++;
+    if (month === 13) {
+      month = 1;
+      year++;
+    }
+  }
+  const months = new Map(monthly.map((m) => [m.month, m]));
+  const applicants = new Map(monthly.map((m) => [m.month, new Set()]));
+  const recipients = new Map(monthly.map((m) => [m.month, new Set()]));
+  const helpedPeople = new Set();
   const result = {
     people: 0,
     requests: 0,
@@ -132,43 +173,64 @@ export function summarize(people, from, to) {
     partial: 0,
     closed: 0,
     amount: 0,
+    helpedPeople: 0,
+    helpedEvents: 0,
+    unknownAge: 0,
     category: categories.map(() => 0),
     ages: [0, 0, 0, 0],
     villages: {},
-    monthly: Array.from({ length: 12 }, () => ({ requested: 0, helped: 0 })),
+    monthly,
   };
   for (const p of people) {
     const rs = (p.requests || []).filter((r) => within(r.date));
-    if (!rs.length) continue;
-    result.people++;
-    result.requests += rs.length;
-    const s = personStatus({ ...p, requests: rs });
-    if (s === "done") result.done++;
-    if (s === "partial") result.partial++;
-    if (s === "closed") result.closed++;
-    const a = age(p.birth, to || undefined);
-    if (a !== null) result.ages[a < 18 ? 0 : a < 26 ? 1 : a < 60 ? 2 : 3]++;
-    result.villages[p.village] = (result.villages[p.village] || 0) + 1;
-    for (let c = 0; c < 7; c++)
-      if (rs.some((r) => Number(r.category) === c)) result.category[c]++;
-    for (const r of rs)
-      result.monthly[(Number(r.date.slice(5, 7)) + 2) % 12].requested++;
-  }
-  for (const p of people)
+    if (rs.length) {
+      result.people++;
+      result.requests += rs.length;
+      const status = personStatus({ requests: rs });
+      if (status === "done") result.done++;
+      if (status === "partial") result.partial++;
+      if (status === "closed") result.closed++;
+      const a = age(p.birth, to);
+      if (a !== null) result.ages[a < 18 ? 0 : a < 26 ? 1 : a < 60 ? 2 : 3]++;
+      else result.unknownAge++;
+      result.villages[p.village] = (result.villages[p.village] || 0) + 1;
+      for (let c = 0; c < 7; c++)
+        if (rs.some((r) => Number(r.category) === c)) result.category[c]++;
+      for (const r of rs) {
+        const key = r.date.slice(0, 7);
+        months.get(key).requested++;
+        applicants.get(key).add(p);
+      }
+    }
     for (const r of p.requests || [])
       for (const payment of r.payments || [])
         if (within(payment.date)) {
-          result.amount += Number(payment.amount || 0);
-          result.monthly[(Number(payment.date.slice(5, 7)) + 2) % 12].helped++;
+          const key = payment.date.slice(0, 7),
+            amount = toSatang(payment.amount);
+          if (amount === null) throw new Error("ข้อมูลจำนวนเงินไม่ถูกต้อง");
+          result.amount += amount;
+          result.helpedEvents++;
+          helpedPeople.add(p);
+          months.get(key).helped++;
+          months.get(key).amount += amount;
+          recipients.get(key).add(p);
         }
+  }
+  result.amount /= 100;
+  result.helpedPeople = helpedPeople.size;
+  for (const m of monthly) {
+    m.amount /= 100;
+    m.requestedPeople = applicants.get(m.month).size;
+    m.helpedPeople = recipients.get(m.month).size;
+  }
   return result;
 }
-const isDate = (s) =>
+export const isDate = (s) =>
   typeof s === "string" &&
   /^\d{4}-\d{2}-\d{2}$/.test(s) &&
   !Number.isNaN(Date.parse(s)) &&
   new Date(s).toISOString().slice(0, 10) === s;
-export function validatePerson(p, config) {
+export function validatePerson(p, config, today = thailandDate()) {
   if (!p || typeof p !== "object") return "ข้อมูลไม่ถูกต้อง";
   if (
     typeof p.first !== "string" ||
@@ -183,10 +245,7 @@ export function validatePerson(p, config) {
     return "หมู่บ้านไม่ถูกต้อง";
   if (p.nationalId && !validNationalId(p.nationalId))
     return "เลขบัตรประชาชนไม่ถูกต้อง";
-  if (
-    p.birth &&
-    (!isDate(p.birth) || p.birth > new Date().toISOString().slice(0, 10))
-  )
+  if (p.birth && (!isDate(p.birth) || p.birth > today))
     return "วันเกิดไม่ถูกต้อง";
   if (
     !Array.isArray(p.disabilities) ||
@@ -198,18 +257,21 @@ export function validatePerson(p, config) {
   if (
     !Array.isArray(p.requests) ||
     p.requests.length > 200 ||
+    p.requests.some((r) => !r || typeof r !== "object") ||
     new Set(p.requests.map((r) => r.id)).size !== p.requests.length
   )
     return "รายการคำขอไม่ถูกต้อง";
   for (const r of p.requests) {
     if (
       !/^[0-6]$/.test(String(r.category)) ||
-      !statuses[r.status] ||
+      !Object.hasOwn(statuses, r.status) ||
       !isDate(r.date) ||
       typeof r.type !== "string" ||
       !r.type.trim()
     )
       return "กรุณาระบุประเภท วันที่ และสถานะคำขอ";
+    if (r.date > today || (p.birth && r.date < p.birth))
+      return "วันที่ยื่นคำขอต้องไม่อยู่ในอนาคตหรือก่อนวันเกิด";
     if (
       closed.includes(r.status) &&
       (typeof r.reason !== "string" || !r.reason.trim())
@@ -220,7 +282,25 @@ export function validatePerson(p, config) {
     if (r.status === "done" && !r.payments.length)
       return "กรุณาบันทึกการช่วยเหลือก่อนระบุว่าช่วยเหลือแล้ว";
     for (const x of r.payments) {
+      if (x && typeof x === "object") {
+        if (!validMoney(x.amount))
+          return "จำนวนเงินต้องเป็นศูนย์หรือจำนวนบวก มีทศนิยมไม่เกิน 2 ตำแหน่ง และไม่เกิน 999,999,999.99 บาท";
+        if (x.date > today)
+          return "วันที่ได้รับความช่วยเหลือต้องไม่อยู่ในอนาคต";
+        if (
+          x.quantity !== "" &&
+          x.quantity !== undefined &&
+          x.quantity !== null &&
+          (!["number", "string"].includes(typeof x.quantity) ||
+            !Number.isFinite(Number(x.quantity)) ||
+            Number(x.quantity) < 0)
+        )
+          return "จำนวนสิ่งของต้องเป็นศูนย์หรือจำนวนบวก";
+      }
+
       if (
+        !x ||
+        typeof x !== "object" ||
         !isDate(x.date) ||
         x.date < r.date ||
         typeof x.provider !== "string" ||
@@ -232,10 +312,37 @@ export function validatePerson(p, config) {
         (!Number(x.amount) && !Number(x.quantity)) ||
         Number(x.amount) < 0 ||
         Number(x.quantity) < 0 ||
-        (Number(x.quantity) > 0 && !x.unit?.trim())
+        (Number(x.quantity) > 0 &&
+          (typeof x.unit !== "string" || !x.unit.trim()))
       )
         return "กรุณาระบุวันที่หลังยื่นคำขอ หน่วยงาน รายละเอียด และจำนวนพร้อมหน่วยนับ";
     }
+  }
+  if (
+    p.requests.some(
+      (r) =>
+        typeof r.id !== "string" ||
+        !r.id ||
+        r.id.length > 100 ||
+        new Set(r.payments.map((x) => x.id)).size !== r.payments.length ||
+        r.payments.some(
+          (x) => typeof x.id !== "string" || !x.id || x.id.length > 100,
+        ),
+    )
+  )
+    return "รหัสรายการคำขอหรือการช่วยเหลือไม่ถูกต้องหรือซ้ำ";
+  return null;
+}
+
+export function validatePersonUpdate(next, previous) {
+  const requests = new Map(next.requests.map((r) => [r.id, r]));
+  for (const old of previous.requests) {
+    const current = requests.get(old.id);
+    if (!current)
+      return "ไม่สามารถลบคำขอที่บันทึกแล้ว กรุณาเปลี่ยนสถานะพร้อมเหตุผลแทน";
+    const payments = new Set(current.payments.map((p) => p.id));
+    if (old.payments.some((p) => !payments.has(p.id)))
+      return "ไม่สามารถลบประวัติการช่วยเหลือที่บันทึกแล้ว";
   }
   return null;
 }

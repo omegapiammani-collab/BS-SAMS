@@ -8,13 +8,8 @@ import {
   ArrowUpRight,
 } from "lucide-react";
 import { api } from "./api";
-import {
-  categories,
-  villageNames,
-  summarize,
-  personLabels,
-  personStatus,
-} from "./domain";
+import { formatMoney } from "./money";
+import { categories, monthLabel, validateReportRange } from "./domain";
 import { Field, ErrorBox, Empty } from "./ui";
 const n = (x) => Number(x || 0).toLocaleString("th-TH");
 function useSummary(range, refresh) {
@@ -22,16 +17,27 @@ function useSummary(range, refresh) {
     [error, setError] = useState("");
   useEffect(() => {
     let active = true;
-    api(`/summary?from=${range[0]}&to=${range[1]}`)
+    const controller = new AbortController();
+    setData(null);
+    setError("");
+    const rangeError = validateReportRange(...range);
+    if (rangeError) {
+      setError(rangeError);
+      return;
+    }
+    api(`/summary?from=${range[0]}&to=${range[1]}`, "GET", undefined, {
+      signal: controller.signal,
+    })
       .then((d) => {
         if (active) {
           setData(d);
           setError("");
         }
       })
-      .catch((e) => active && setError(e.message));
+      .catch((e) => active && e.name !== "AbortError" && setError(e.message));
     return () => {
       active = false;
+      controller.abort();
     };
   }, [range[0], range[1], refresh]);
   return [data, error];
@@ -45,7 +51,7 @@ export function Dashboard({ config, range, refresh, onRegistry }) {
     <>
       <div className="metrics">
         {[
-          [Users, "ผู้ประสบปัญหาทั้งหมด", d.people, "คน", "blue"],
+          [Users, "ผู้ยื่นคำขอในช่วงวันที่", d.people, "คน", "blue"],
           [
             HeartHandshake,
             "คำขอรับความช่วยเหลือ",
@@ -64,9 +70,10 @@ export function Dashboard({ config, range, refresh, onRegistry }) {
               </span>
             </div>
             <strong>
-              {n(value)} <small>{unit}</small>
+              {unit === "บาท" ? formatMoney(value) : n(value)}{" "}
+              <small>{unit}</small>
             </strong>
-            <span className="metric-foot">ข้อมูลในช่วงปีงบประมาณที่เลือก</span>
+            <span className="metric-foot">ข้อมูลในช่วงวันที่ที่เลือก</span>
           </section>
         ))}
       </div>
@@ -108,7 +115,7 @@ export function Dashboard({ config, range, refresh, onRegistry }) {
         </section>
         <section className="panel">
           <div className="panel-title">
-            <h2>ความคืบหน้าการช่วยเหลือ</h2>
+            <h2>สถานะปัจจุบันของคำขอในช่วงวันที่</h2>
             <span className="small muted">รายบุคคล</span>
           </div>
           <div className="donut-layout">
@@ -194,11 +201,14 @@ export function Dashboard({ config, range, refresh, onRegistry }) {
               </div>
             ))}
           </div>
-          <p className="panel-note">คำนวณอายุ ณ วันสิ้นสุดช่วงรายงาน</p>
+          <p className="panel-note">
+            คำนวณอายุ ณ วันสิ้นสุดช่วงรายงาน · ไม่ระบุวันเกิด {n(d.unknownAge)}{" "}
+            คน
+          </p>
         </section>
         <section className="panel">
           <div className="panel-title">
-            <h2>คำขอและการช่วยเหลือรายเดือน</h2>
+            <h2>ผู้ยื่นคำขอและผู้ได้รับความช่วยเหลือรายเดือน</h2>
           </div>
           <div className="monthly">
             {d.monthly.map((m, i) => (
@@ -208,64 +218,47 @@ export function Dashboard({ config, range, refresh, onRegistry }) {
                     style={{
                       height: Math.max(
                         2,
-                        (m.requested /
+                        (m.requestedPeople /
                           Math.max(
                             ...d.monthly.map((x) =>
-                              Math.max(x.requested, x.helped),
+                              Math.max(x.requestedPeople, x.helpedPeople),
                             ),
                             1,
                           )) *
                           130,
                       ),
                     }}
-                    title={`คำขอ ${m.requested}`}
+                    title={`ผู้ยื่นคำขอ ${m.requestedPeople} คน`}
                   />
                   <i
                     style={{
                       height: Math.max(
                         2,
-                        (m.helped /
+                        (m.helpedPeople /
                           Math.max(
                             ...d.monthly.map((x) =>
-                              Math.max(x.requested, x.helped),
+                              Math.max(x.requestedPeople, x.helpedPeople),
                             ),
                             1,
                           )) *
                           130,
                       ),
                     }}
-                    title={`การช่วยเหลือ ${m.helped}`}
+                    title={`ผู้ได้รับความช่วยเหลือ ${m.helpedPeople} คน`}
                   />
                 </div>
-                <span>
-                  {
-                    [
-                      "ต.ค.",
-                      "พ.ย.",
-                      "ธ.ค.",
-                      "ม.ค.",
-                      "ก.พ.",
-                      "มี.ค.",
-                      "เม.ย.",
-                      "พ.ค.",
-                      "มิ.ย.",
-                      "ก.ค.",
-                      "ส.ค.",
-                      "ก.ย.",
-                    ][i]
-                  }
-                </span>
+                <span>{monthLabel(m.month)}</span>
               </div>
             ))}
           </div>
           <div className="inline-legend">
             <span>
               <i />
-              จำนวนคำขอ
+              ผู้ยื่นคำขอ · คน
             </span>
             <span>
               <i />
-              จำนวนครั้งที่ช่วยเหลือ
+              ผู้ได้รับความช่วยเหลือ · คน
             </span>
           </div>
         </section>
@@ -287,7 +280,13 @@ function safeCell(v) {
   return /^[=+\-@\t\r]/.test(s) ? "'" + s : s;
 }
 export async function downloadRows(rows, format, name) {
-  const content = rows.map((r) => r.map(safeCell));
+  const content = rows.map((r) =>
+    r.map((v) =>
+      format !== "csv" && typeof v === "number" && Number.isFinite(v)
+        ? v
+        : safeCell(v),
+    ),
+  );
   let blob;
   if (format === "csv") {
     blob = new Blob(
@@ -336,8 +335,10 @@ export function Reports({ user, config, range, setRange }) {
     setBusy(true);
     setError("");
     try {
-      const people = await api("/export", "POST", {});
-      const sum = summarize(people, ...range);
+      const sum = await api("/report-export", "POST", {
+        from: range[0],
+        to: range[1],
+      });
       const rows =
         type === "category"
           ? categories.map((c, i) => [c, sum.category[i]])
@@ -346,7 +347,33 @@ export function Reports({ user, config, range, setRange }) {
               sum.villages[v.id] || 0,
             ]);
       await downloadRows(
-        [["ช่วงวันที่", ...range], ["หมวดหมู่", "จำนวนคน"], ...rows],
+        [
+          ["ช่วงวันที่", ...range],
+          ["ขอบเขตข้อมูล", "เฉพาะหมู่บ้านที่มีสิทธิ์ดูและส่งออก"],
+          ["หมวดหมู่", "จำนวนคน"],
+          ...rows,
+          [],
+          ["ยอดรวมผู้ยื่นคำขอ", sum.people],
+          ["ผู้ได้รับความช่วยเหลือจริง", sum.helpedPeople],
+          ["จำนวนครั้งช่วยเหลือ", sum.helpedEvents],
+          [],
+          [
+            "เดือน",
+            "ผู้ยื่นคำขอ (คน)",
+            "คำขอ (รายการ)",
+            "ผู้ได้รับความช่วยเหลือ (คน)",
+            "ช่วยเหลือ (ครั้ง)",
+            "จำนวนเงิน (บาท)",
+          ],
+          ...sum.monthly.map((m) => [
+            monthLabel(m.month),
+            m.requestedPeople,
+            m.requested,
+            m.helpedPeople,
+            m.helped,
+            m.amount,
+          ]),
+        ],
         format,
         "รายงานผู้ประสบปัญหา",
       );
@@ -388,11 +415,37 @@ export function Reports({ user, config, range, setRange }) {
           </Field>
         </div>
         <div className="notice">
+          นับผู้ยื่นคำขอตามวันที่ยื่น
+          และผู้ได้รับความช่วยเหลือตามวันที่ได้รับจริง
+          คนเดิมได้รับหลายครั้งจะนับเป็นคนเดียวในแต่ละเดือน
           ยอดบนหน้าจอแสดงครบทั้งตำบล
           ส่วนไฟล์ส่งออกมีเฉพาะหมู่บ้านที่คุณมีสิทธิ์ดูและส่งออก
         </div>
       </section>
       <ErrorBox error={error || exportError} />
+      {!d && !error && (
+        <p role="status" className="loading">
+          กำลังโหลดรายงาน…
+        </p>
+      )}
+      {d && (
+        <section className="metrics report-metrics">
+          {[
+            ["ผู้ยื่นคำขอ", d.people, "คน"],
+            ["คำขอในช่วงวันที่", d.requests, "รายการ"],
+            ["ผู้ได้รับความช่วยเหลือจริง", d.helpedPeople, "คน"],
+            ["การช่วยเหลือจริง", d.helpedEvents, "ครั้ง"],
+          ].map(([label, value, unit]) => (
+            <div className="metric" key={label}>
+              <span className="metric-label">{label}</span>
+              <strong>
+                {unit === "บาท" ? formatMoney(value) : n(value)}{" "}
+                <small>{unit}</small>
+              </strong>
+            </div>
+          ))}
+        </section>
+      )}
       <section className="panel">
         <div className="panel-title">
           <h2>
@@ -405,8 +458,11 @@ export function Reports({ user, config, range, setRange }) {
                 key={f}
                 disabled={
                   busy ||
+                  !d ||
+                  !!error ||
                   (user.role !== "admin" &&
-                    !user.permissions.includes("export"))
+                    (!user.permissions.includes("export") ||
+                      !user.permissions.includes("view")))
                 }
                 onClick={() => exportData(f)}
               >
@@ -435,6 +491,44 @@ export function Reports({ user, config, range, setRange }) {
           </table>
         </div>
       </section>
+      {d && (
+        <section className="panel">
+          <div className="panel-title">
+            <h2>รายละเอียดรายเดือน</h2>
+          </div>
+          <p className="panel-note">
+            จำนวนคนในแต่ละเดือนนับไม่ซ้ำภายในเดือน
+            การรวมรายเดือนอาจมากกว่ายอดคนทั้งช่วงวันที่
+            ผู้ได้รับความช่วยเหลืออาจยื่นคำขอก่อนช่วงวันที่นี้
+          </p>
+          <div className="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>เดือน</th>
+                  <th>ผู้ยื่นคำขอ · คน</th>
+                  <th>คำขอ · รายการ</th>
+                  <th>ผู้ได้รับความช่วยเหลือ · คน</th>
+                  <th>ช่วยเหลือ · ครั้ง</th>
+                  <th>จำนวนเงิน · บาท</th>
+                </tr>
+              </thead>
+              <tbody>
+                {d.monthly.map((m) => (
+                  <tr key={m.month}>
+                    <td>{monthLabel(m.month)}</td>
+                    <td>{n(m.requestedPeople)}</td>
+                    <td>{n(m.requested)}</td>
+                    <td>{n(m.helpedPeople)}</td>
+                    <td>{n(m.helped)}</td>
+                    <td>{formatMoney(m.amount)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
     </>
   );
 }

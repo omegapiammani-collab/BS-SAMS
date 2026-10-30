@@ -1,8 +1,18 @@
+import { validateAccount, validPassword } from "./accounts.js";
+import { listAudit } from "./audit.js";
+import {
+  parsePeopleQuery,
+  QueryError,
+  listPeople,
+  peopleSelection,
+  personFromRow,
+} from "./people.js";
 import {
   defaultConfig,
   summarize,
+  validateReportRange,
   validatePerson,
-  permissions,
+  validatePersonUpdate,
 } from "../src/domain.js";
 import { hashPassword, verifyPassword, safeUser, allowed } from "./auth.js";
 const json = (data, status = 200, headers = {}) =>
@@ -18,10 +28,14 @@ const json = (data, status = 200, headers = {}) =>
 const fail = (message, status = 400) => json({ error: message }, status);
 const cookie = (r) =>
   r.headers.get("Cookie")?.match(/(?:^|;\s*)session=([^;]+)/)?.[1];
-const audit = (db, u, action, target) =>
+const audit = (db, u, action, target, onlyIfChanged = false) =>
   db
-    .prepare("INSERT INTO audit(actor,action,target) VALUES(?,?,?)")
-    .bind(u.id, action, target);
+    .prepare(
+      onlyIfChanged
+        ? "INSERT INTO audit(actor,action,target,actor_username) SELECT ?,?,?,? WHERE changes()>0"
+        : "INSERT INTO audit(actor,action,target,actor_username) VALUES(?,?,?,?)",
+    )
+    .bind(u.id, action, target, u.username);
 async function config(db) {
   const row = await db
     .prepare("SELECT data FROM config WHERE id='system'")
@@ -108,7 +122,11 @@ export default {
       }
       if (path === "/api/password" && method === "POST") {
         const b = await request.json();
-        if (!(await verifyPassword(b.current, row.password)))
+        if (
+          typeof b.current !== "string" ||
+          b.current.length > 128 ||
+          !(await verifyPassword(b.current, row.password))
+        )
           return fail("รหัสผ่านเดิมไม่ถูกต้อง");
         if (
           typeof b.password !== "string" ||
@@ -187,34 +205,51 @@ export default {
         }));
       };
       if (path === "/api/summary" && method === "GET") {
+        const from = url.searchParams.get("from"),
+          to = url.searchParams.get("to");
+        const error = validateReportRange(from, to);
+        if (error) return fail(error);
         const list = (await all()).filter((p) => !p.deletedAt);
-        return json(
-          summarize(
-            list,
-            url.searchParams.get("from"),
-            url.searchParams.get("to"),
-          ),
-        );
+        return json(summarize(list, from, to));
+      }
+      if (path === "/api/report-export" && method === "POST") {
+        const { from, to } = await request.json();
+        const error = validateReportRange(from, to);
+        if (error) return fail(error);
+        if (
+          u.role !== "admin" &&
+          (!u.permissions.includes("view") || !u.permissions.includes("export"))
+        )
+          return fail("ไม่มีสิทธิ์ส่งออกรายงาน", 403);
+        const query = parsePeopleQuery(new URLSearchParams());
+        const selection = peopleSelection(u, query, true);
+        const rows = await db
+          .prepare(`SELECT * FROM people WHERE ${selection.where}`)
+          .bind(...selection.args)
+          .all();
+        const summary = summarize(rows.results.map(personFromRow), from, to);
+        await audit(db, u, "export-report", "summary").run();
+        return json(summary);
       }
       if (path === "/api/people" && method === "GET") {
-        const trash = url.searchParams.get("trash") === "1";
-        if (trash && u.role !== "admin") return fail("ไม่มีสิทธิ์", 403);
-        return json(
-          (await all()).filter(
-            (p) => !!p.deletedAt === trash && allowed(u, "view", p.village),
-          ),
-        );
+        const query = parsePeopleQuery(url.searchParams);
+        if (query.trash && u.role !== "admin") return fail("ไม่มีสิทธิ์", 403);
+        return json(await listPeople(db, u, query));
       }
       if (path === "/api/export" && method === "POST") {
         const b = await request.json();
-        const list = (await all()).filter(
-          (p) =>
-            !p.deletedAt &&
-            allowed(u, "view", p.village) &&
-            allowed(u, "export", p.village),
-        );
+        const query = parsePeopleQuery(new URLSearchParams(b.filters || {}));
+        query.trash = false;
+        const selection = peopleSelection(u, query, true);
+        const result = await db
+          .prepare(
+            `SELECT * FROM people WHERE ${selection.where} ORDER BY ${selection.order}`,
+          )
+          .bind(...selection.args)
+          .all();
+        const list = result.results.map(personFromRow);
         await audit(db, u, "export", "people").run();
-        return json(list.filter((p) => !b.ids || b.ids.includes(p.id)));
+        return json(list);
       }
       if (path === "/api/people" && method === "POST") {
         const p = await request.json(),
@@ -275,6 +310,10 @@ export default {
             return fail("ไม่มีสิทธิ์", 403);
           const err = validatePerson(p, await config(db));
           if (err) return fail(err);
+          if (p.version !== stored.version)
+            return fail("มีผู้แก้ไขข้อมูลแล้ว กรุณาโหลดใหม่", 409);
+          const historyError = validatePersonUpdate(p, old);
+          if (historyError) return fail(historyError);
           const result = await db.batch([
             db
               .prepare(
@@ -287,7 +326,7 @@ export default {
                 id,
                 p.version,
               ),
-            audit(db, u, "update-person", id),
+            audit(db, u, "update-person", id, true),
           ]);
           if (!result[0].meta.changes)
             return fail("มีผู้แก้ไขข้อมูลแล้ว กรุณาโหลดใหม่", 409);
@@ -312,6 +351,31 @@ export default {
           return json({ ok: true });
         }
       }
+      const resetMatch = path.match(/^\/api\/users\/([^/]+)\/reset-password$/);
+      if (resetMatch && u.role === "admin" && method === "POST") {
+        const id = resetMatch[1];
+        if (id === u.id)
+          return fail("กรุณาใช้เมนูเปลี่ยนรหัสผ่านสำหรับบัญชีของคุณ");
+        const body = await request.json();
+        if (!validPassword(body?.password))
+          return fail("รหัสผ่านชั่วคราวต้องมี 12–128 ตัวอักษร");
+        const target = await db
+          .prepare("SELECT id,active FROM users WHERE id=?")
+          .bind(id)
+          .first();
+        if (!target) return fail("ไม่พบบัญชีผู้ใช้งาน", 404);
+        if (!target.active)
+          return fail("กรุณาเปิดใช้งานบัญชีก่อนรีเซ็ตรหัสผ่าน", 409);
+        const hash = await hashPassword(body.password);
+        await db.batch([
+          db
+            .prepare("UPDATE users SET password=?,must_change=1 WHERE id=?")
+            .bind(hash, id),
+          db.prepare("DELETE FROM sessions WHERE user_id=?").bind(id),
+          audit(db, u, "reset-password", id),
+        ]);
+        return json({ ok: true });
+      }
       if (path === "/api/users" && u.role === "admin") {
         if (method === "GET") {
           const users = await db
@@ -321,18 +385,22 @@ export default {
         }
         if (method === "POST" || method === "PUT") {
           const b = await request.json();
-          if (
-            !/^[a-zA-Z0-9._-]{3,50}$/.test(b.username) ||
-            !b.name?.trim() ||
-            !["admin", "staff"].includes(b.role) ||
-            !Array.isArray(b.permissions) ||
-            b.permissions.some((p) => !permissions.includes(p)) ||
-            !Array.isArray(b.villages) ||
-            b.villages.some((v) => !Number.isInteger(v))
-          )
-            return fail("ข้อมูลผู้ใช้งานไม่ถูกต้อง");
-          if (b.password && (b.password.length < 12 || b.password.length > 128))
-            return fail("รหัสผ่านต้องมี 12–128 ตัวอักษร");
+          const invalid = validateAccount(
+            b,
+            await config(db),
+            method === "POST",
+          );
+          if (invalid) return fail(invalid);
+          if (method === "PUT") {
+            if (typeof b.id !== "string") return fail("รหัสบัญชีไม่ถูกต้อง");
+            if (
+              !(await db
+                .prepare("SELECT id FROM users WHERE id=?")
+                .bind(b.id)
+                .first())
+            )
+              return fail("ไม่พบบัญชีผู้ใช้งาน", 404);
+          }
           if (b.id === u.id && (b.role !== "admin" || !b.active))
             return fail("ไม่สามารถลดสิทธิ์หรือปิดบัญชีตัวเอง");
           const id = method === "POST" ? crypto.randomUUID() : b.id;
@@ -340,7 +408,7 @@ export default {
             if (!b.password) return fail("กรุณากำหนดรหัสผ่านชั่วคราว");
             await db.batch([
               db
-                .prepare("INSERT INTO users VALUES(?,?,?,?,?,?,?,1,1)")
+                .prepare("INSERT INTO users VALUES(?,?,?,?,?,?,?,1,?)")
                 .bind(
                   id,
                   b.username,
@@ -349,6 +417,7 @@ export default {
                   b.role,
                   JSON.stringify(b.permissions),
                   JSON.stringify(b.villages),
+                  b.active ? 1 : 0,
                 ),
               audit(db, u, "create-user", id),
             ]);
@@ -370,27 +439,15 @@ export default {
               db.prepare("DELETE FROM sessions WHERE user_id=?").bind(id),
               audit(db, u, "update-user", id),
             ]);
-            if (b.password)
-              await db
-                .prepare("UPDATE users SET password=?,must_change=1 WHERE id=?")
-                .bind(await hashPassword(b.password), id)
-                .run();
           }
           return json({ ok: true });
         }
       }
       if (path === "/api/audit" && u.role === "admin" && method === "GET")
-        return json(
-          (
-            await db
-              .prepare(
-                "SELECT a.*,u.username FROM audit a LEFT JOIN users u ON u.id=a.actor ORDER BY a.id DESC LIMIT 200",
-              )
-              .all()
-          ).results,
-        );
+        return json(await listAudit(db, url.searchParams));
       return fail("ไม่พบเส้นทางหรือไม่มีสิทธิ์", 404);
     } catch (e) {
+      if (e instanceof QueryError) return fail(e.message);
       if (String(e).includes("UNIQUE constraint"))
         return fail("เลขบัตรประชาชนหรือชื่อผู้ใช้ซ้ำ", 409);
       console.error("API failure", e.name);

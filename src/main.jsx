@@ -7,6 +7,7 @@ import {
   Settings,
   Shield,
   LogOut,
+  KeyRound,
   Menu,
   HeartHandshake,
   Plus,
@@ -32,6 +33,7 @@ import { Dashboard, Reports } from "./reports";
 import { Registry } from "./registry";
 import { UserAdmin, SystemSettings } from "./settings";
 import "./style.css";
+import { PasswordDialog } from "./password";
 export const categoryIcons = [
   Wallet,
   House,
@@ -48,7 +50,7 @@ const nav = [
   ["users", "จัดการผู้ใช้งาน", Shield],
   ["settings", "ตั้งค่าระบบ", Settings],
 ];
-function Login({ onLogin, change = false }) {
+function Login({ onLogin, change = false, notice = "" }) {
   const [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
   async function submit(e) {
@@ -97,6 +99,11 @@ function Login({ onLogin, change = false }) {
             ? "เปลี่ยนรหัสผ่านชั่วคราวก่อนเริ่มใช้งาน"
             : "สำหรับผู้ดูแลระบบและเจ้าหน้าที่"}
         </p>
+        {notice && (
+          <p className="success" role="status">
+            {notice}
+          </p>
+        )}
         <form onSubmit={submit}>
           <ErrorBox error={error} />
           {change ? (
@@ -164,7 +171,9 @@ function App() {
     [page, setPage] = useState("dashboard"),
     [menu, setMenu] = useState(false),
     [refresh, setRefresh] = useState(0),
-    [error, setError] = useState("");
+    [error, setError] = useState(""),
+    [passwordOpen, setPasswordOpen] = useState(false),
+    [notice, setNotice] = useState("");
   const [year, setYear] = useState(fiscalYear()),
     [range, setRange] = useState(fiscalRange(fiscalYear()));
   useEffect(() => {
@@ -183,7 +192,20 @@ function App() {
   }, [user, refresh]);
   if (user === undefined) return <div className="loading">กำลังโหลดระบบ…</div>;
   if (!user || user.mustChange)
-    return <Login onLogin={setUser} change={!!user?.mustChange} />;
+    return (
+      <Login
+        notice={notice}
+        onLogin={(u) => {
+          setUser(u);
+          setPage("dashboard");
+          setMenu(false);
+          setPasswordOpen(false);
+          if (u) setNotice("");
+          else setNotice("ตั้งรหัสผ่านใหม่แล้ว กรุณาเข้าสู่ระบบอีกครั้ง");
+        }}
+        change={!!user?.mustChange}
+      />
+    );
   async function logout() {
     await api("/logout", "POST", {});
     setUser(null);
@@ -191,6 +213,17 @@ function App() {
   }
   return (
     <div className="app">
+      {passwordOpen && (
+        <PasswordDialog
+          onClose={() => setPasswordOpen(false)}
+          onSaved={() => {
+            setPasswordOpen(false);
+            setNotice("เปลี่ยนรหัสผ่านเรียบร้อยแล้ว กรุณาเข้าสู่ระบบอีกครั้ง");
+            setUser(null);
+            setPage("dashboard");
+          }}
+        />
+      )}
       <aside className={menu ? "sidebar open" : "sidebar"}>
         <div className="brand">
           {config.logo ? (
@@ -233,6 +266,16 @@ function App() {
               <small>อบต.บ้านเสด็จ จังหวัดลำปาง</small>
             </span>
           </div>
+          <button
+            className="account-password"
+            onClick={() => {
+              setPasswordOpen(true);
+              setMenu(false);
+            }}
+          >
+            <KeyRound size={16} />
+            เปลี่ยนรหัสผ่าน
+          </button>
           <div className="profile">
             <div className="avatar">{user.name[0]}</div>
             <div>
@@ -294,12 +337,20 @@ function App() {
               <label className="year">
                 ปีงบประมาณ
                 <select
-                  value={year}
+                  value={
+                    range[0] === fiscalRange(year)[0] &&
+                    range[1] === fiscalRange(year)[1]
+                      ? year
+                      : "custom"
+                  }
                   onChange={(e) => {
                     setYear(+e.target.value);
                     setRange(fiscalRange(+e.target.value));
                   }}
                 >
+                  <option value="custom" disabled>
+                    กำหนดช่วงวันที่เอง
+                  </option>
                   {Array.from(
                     { length: 7 },
                     (_, i) => fiscalYear() + 1 - i,

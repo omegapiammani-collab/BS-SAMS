@@ -30,17 +30,37 @@ export const Empty = ({ text = "ยังไม่มีข้อมูล", chi
     {children}
   </div>
 );
-export function Modal({ title, onClose, children, wide = false }) {
+export function Modal({
+  title,
+  onClose,
+  children,
+  wide = false,
+  closeDisabled = false,
+}) {
   const ref = React.useRef();
+  const titleId = React.useId();
   React.useEffect(() => {
     ref.current.showModal();
     return () => ref.current?.close();
   }, []);
   return (
-    <dialog ref={ref} onCancel={onClose} className={wide ? "wide" : ""}>
+    <dialog
+      ref={ref}
+      aria-labelledby={titleId}
+      onCancel={(event) => {
+        event.preventDefault();
+        onClose();
+      }}
+      className={wide ? "wide" : ""}
+    >
       <div className="modal-head">
-        <h2>{title}</h2>
-        <button className="icon" aria-label="ปิด" onClick={onClose}>
+        <h2 id={titleId}>{title}</h2>
+        <button
+          className="icon"
+          aria-label="ปิด"
+          disabled={closeDisabled}
+          onClick={onClose}
+        >
           <X />
         </button>
       </div>
@@ -54,3 +74,25 @@ export const ErrorBox = ({ error }) =>
       {error}
     </div>
   ) : null;
+
+export function ConfirmDialog({
+  title,
+  description,
+  confirmText,
+  onConfirm,
+  onCancel,
+}) {
+  return (
+    <Modal title={title} onClose={onCancel}>
+      <p>{description}</p>
+      <div className="modal-actions">
+        <button type="button" onClick={onCancel}>
+          กลับไปแก้ไข
+        </button>
+        <button type="button" className="danger-button" onClick={onConfirm}>
+          {confirmText}
+        </button>
+      </div>
+    </Modal>
+  );
+}

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import {
   Plus,
   Search,
@@ -28,8 +28,10 @@ import {
   personLabels,
   validatePerson,
 } from "./domain";
-import { Field, Select, Modal, Empty, ErrorBox } from "./ui";
+import { Field, Select, Modal, Empty, ErrorBox, ConfirmDialog } from "./ui";
 import { downloadRows } from "./reports";
+import { formatMoney, sumMoney, thailandDate } from "./money";
+import { useUnsavedChanges } from "./use-unsaved-changes";
 const icons = [
   Wallet,
   House,
@@ -39,10 +41,7 @@ const icons = [
   Accessibility,
   Ellipsis,
 ];
-const today = () =>
-  new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok" }).format(
-    new Date(),
-  );
+const today = thailandDate;
 const initial = () => ({
   title: "นาย",
   first: "",
@@ -62,6 +61,8 @@ const can = (u, p, v) =>
   (u.permissions.includes(p) && u.villages.includes(Number(v)));
 export function Registry({ user, config, refresh }) {
   const [data, setData] = useState([]),
+    [total, setTotal] = useState(0),
+    [reload, setReload] = useState(0),
     [loading, setLoading] = useState(true),
     [error, setError] = useState(""),
     [trash, setTrash] = useState(false),
@@ -78,38 +79,55 @@ export function Registry({ user, config, refresh }) {
     [readonly, setReadonly] = useState(false),
     [deleting, setDeleting] = useState(null),
     [busy, setBusy] = useState(false);
-  async function load() {
-    setLoading(true);
-    try {
-      setData(await api("/people" + (trash ? "?trash=1" : "")));
-      setError("");
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setLoading(false);
-    }
+  const requestVersion = useRef(0);
+  const params = new URLSearchParams({
+    ...filters,
+    page: String(page),
+    size: String(size),
+    sort,
+    direction: ascending ? "asc" : "desc",
+    trash: trash ? "1" : "0",
+  });
+  const queryString = params.toString();
+  function load() {
+    setReload((n) => n + 1);
   }
   useEffect(() => {
-    load();
-  }, [trash]);
-  const visible = data
-    .filter(
-      (p) =>
-        (!filters.q ||
-          `${p.first} ${p.last} ${p.nationalId} ${p.id}`.includes(filters.q)) &&
-        (!filters.village || p.village === Number(filters.village)) &&
-        (!filters.status || personStatus(p) === filters.status) &&
-        (!filters.cat || p.requests.some((r) => r.category === filters.cat)),
-    )
-    .sort(
-      (a, b) =>
-        (ascending ? 1 : -1) *
-        (sort === "village"
-          ? a.village - b.village
-          : (a.first + a.last).localeCompare(b.first + b.last, "th")),
-    );
-  const pages = Math.max(1, Math.ceil(visible.length / size));
-  const currentPage = Math.min(page, pages);
+    const controller = new AbortController();
+    const version = ++requestVersion.current;
+    setLoading(true);
+    setError("");
+    setData([]);
+    api("/people?" + queryString, "GET", undefined, {
+      signal: controller.signal,
+    })
+      .then((result) => {
+        if (version !== requestVersion.current) return;
+        const last = Math.max(1, Math.ceil(result.total / size));
+        if (page > last) {
+          setPage(last);
+          return;
+        }
+        setData(result.items);
+        setTotal(result.total);
+      })
+      .catch((e) => {
+        if (e.name !== "AbortError" && version === requestVersion.current) {
+          setError(e.message);
+          setTotal(0);
+        }
+      })
+      .finally(() => {
+        if (version === requestVersion.current && !controller.signal.aborted)
+          setLoading(false);
+      });
+    return () => {
+      controller.abort();
+    };
+  }, [queryString, reload]);
+  const visible = data;
+  const pages = Math.max(1, Math.ceil(total / size));
+  const currentPage = page;
   function clear() {
     setQ("");
     setVillage("");
@@ -122,7 +140,7 @@ export function Registry({ user, config, refresh }) {
     try {
       setBusy(true);
       const list = await api("/export", "POST", {
-        ids: visible.map((p) => p.id),
+        filters: { ...filters, sort, direction: ascending ? "asc" : "desc" },
       });
       await downloadRows(
         [
@@ -190,7 +208,11 @@ export function Registry({ user, config, refresh }) {
             <>
               <button
                 disabled={
-                  busy || !data.some((p) => can(user, "export", p.village))
+                  busy ||
+                  loading ||
+                  total === 0 ||
+                  (user.role !== "admin" &&
+                    !user.permissions.includes("export"))
                 }
                 onClick={() => exportData("csv")}
               >
@@ -199,7 +221,11 @@ export function Registry({ user, config, refresh }) {
               </button>
               <button
                 disabled={
-                  busy || !data.some((p) => can(user, "export", p.village))
+                  busy ||
+                  loading ||
+                  total === 0 ||
+                  (user.role !== "admin" &&
+                    !user.permissions.includes("export"))
                 }
                 onClick={() => exportData("xlsx")}
               >
@@ -308,7 +334,7 @@ export function Registry({ user, config, refresh }) {
           <div className="panel-title">
             <h2>{trash ? "ข้อมูลในถังขยะ" : "รายการผู้ประสบปัญหา"}</h2>
             <span className="small muted">
-              {visible.length.toLocaleString("th-TH")} รายการ
+              {total.toLocaleString("th-TH")} รายการ
             </span>
           </div>
           <ErrorBox error={error} />
@@ -344,137 +370,133 @@ export function Registry({ user, config, refresh }) {
                 </tr>
               </thead>
               <tbody>
-                {visible
-                  .slice((currentPage - 1) * size, currentPage * size)
-                  .map((p) => (
-                    <tr key={p.id}>
-                      <td>
-                        <span className={"badge " + personStatus(p)}>
-                          {personLabels[personStatus(p)]}
-                        </span>
-                        {trash && (
-                          <small className="block muted">
-                            ลบโดย {p.deletedBy}
-                            <br />
-                            {p.deleteReason}
-                          </small>
-                        )}
-                      </td>
-                      <td>
-                        <strong>
-                          {p.title}
-                          {p.first} {p.last}
-                        </strong>
+                {visible.map((p) => (
+                  <tr key={p.id}>
+                    <td>
+                      <span className={"badge " + personStatus(p)}>
+                        {personLabels[personStatus(p)]}
+                      </span>
+                      {trash && (
                         <small className="block muted">
-                          อายุ {age(p.birth) ?? "ไม่ระบุ"} ปี
+                          ลบโดย {p.deletedBy}
+                          <br />
+                          {p.deleteReason}
                         </small>
-                      </td>
-                      <td>
-                        ม.{p.village}
-                        <small className="block muted">
-                          บ้าน
-                          {
-                            config.villages.find((v) => v.id === p.village)
-                              ?.name
-                          }
-                        </small>
-                      </td>
-                      <td>
-                        <div className="category-icons">
-                          {categories.map((c, i) => {
-                            const Icon = icons[i];
-                            const rs = p.requests.filter(
-                              (r) => Number(r.category) === i,
-                            );
-                            const s = personStatus({ requests: rs });
-                            return (
-                              <span
-                                key={c}
-                                tabIndex={0}
-                                className={"category-icon " + s}
-                                title={`${c}: ${personLabels[s]}`}
-                                aria-label={`${c}: ${personLabels[s]}`}
-                              >
-                                <Icon size={16} />
-                                <span className="tooltip">
-                                  {c} · {personLabels[s]}
-                                </span>
+                      )}
+                    </td>
+                    <td>
+                      <strong>
+                        {p.title}
+                        {p.first} {p.last}
+                      </strong>
+                      <small className="block muted">
+                        อายุ {age(p.birth) ?? "ไม่ระบุ"} ปี
+                      </small>
+                    </td>
+                    <td>
+                      ม.{p.village}
+                      <small className="block muted">
+                        บ้าน
+                        {config.villages.find((v) => v.id === p.village)?.name}
+                      </small>
+                    </td>
+                    <td>
+                      <div className="category-icons">
+                        {categories.map((c, i) => {
+                          const Icon = icons[i];
+                          const rs = p.requests.filter(
+                            (r) => Number(r.category) === i,
+                          );
+                          const s = personStatus({ requests: rs });
+                          return (
+                            <span
+                              key={c}
+                              tabIndex={0}
+                              className={"category-icon " + s}
+                              title={`${c}: ${personLabels[s]}`}
+                              aria-label={`${c}: ${personLabels[s]}`}
+                            >
+                              <Icon size={16} />
+                              <span className="tooltip">
+                                {c} · {personLabels[s]}
                               </span>
-                            );
-                          })}
-                        </div>
-                      </td>
-                      <td>
-                        <div className="actions">
-                          {trash ? (
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </td>
+                    <td>
+                      <div className="actions">
+                        {trash ? (
+                          <button
+                            title="กู้คืน"
+                            onClick={async () => {
+                              try {
+                                await api(
+                                  `/people/${p.id}/restore`,
+                                  "POST",
+                                  {},
+                                );
+                                load();
+                                refresh();
+                              } catch (e) {
+                                setError(e.message);
+                              }
+                            }}
+                          >
+                            <RotateCcw size={17} />
+                            กู้คืน
+                          </button>
+                        ) : (
+                          <>
                             <button
-                              title="กู้คืน"
-                              onClick={async () => {
-                                try {
-                                  await api(
-                                    `/people/${p.id}/restore`,
-                                    "POST",
-                                    {},
-                                  );
-                                  load();
-                                  refresh();
-                                } catch (e) {
-                                  setError(e.message);
-                                }
+                              className="icon"
+                              aria-label={`ดู ${p.first}`}
+                              onClick={() => {
+                                setReadonly(true);
+                                setEditor(p);
                               }}
                             >
-                              <RotateCcw size={17} />
-                              กู้คืน
+                              <Eye size={17} />
                             </button>
-                          ) : (
-                            <>
+                            {can(user, "edit", p.village) && (
                               <button
                                 className="icon"
-                                aria-label={`ดู ${p.first}`}
+                                aria-label={`แก้ไข ${p.first}`}
                                 onClick={() => {
-                                  setReadonly(true);
+                                  setReadonly(false);
                                   setEditor(p);
                                 }}
                               >
-                                <Eye size={17} />
+                                <Pencil size={17} />
                               </button>
-                              {can(user, "edit", p.village) && (
-                                <button
-                                  className="icon"
-                                  aria-label={`แก้ไข ${p.first}`}
-                                  onClick={() => {
-                                    setReadonly(false);
-                                    setEditor(p);
-                                  }}
-                                >
-                                  <Pencil size={17} />
-                                </button>
-                              )}
-                              {can(user, "delete", p.village) && (
-                                <button
-                                  className="icon danger"
-                                  aria-label={`ลบ ${p.first}`}
-                                  onClick={() => setDeleting(p)}
-                                >
-                                  <Trash2 size={17} />
-                                </button>
-                              )}
-                            </>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                            )}
+                            {can(user, "delete", p.village) && (
+                              <button
+                                className="icon danger"
+                                aria-label={`ลบ ${p.first}`}
+                                onClick={() => setDeleting(p)}
+                              >
+                                <Trash2 size={17} />
+                              </button>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
           {loading ? (
             <p className="loading">กำลังโหลดข้อมูล…</p>
           ) : (
+            !error &&
             !visible.length && (
               <Empty
                 text={
-                  data.length
+                  Object.values(filters).some(Boolean)
                     ? "ไม่พบข้อมูลตามเงื่อนไข"
                     : "ยังไม่มีข้อมูลในรายการนี้"
                 }
@@ -484,7 +506,7 @@ export function Registry({ user, config, refresh }) {
             )
           )}
           <div className="pagination">
-            <span>ทั้งหมด {visible.length} รายการ</span>
+            <span>ทั้งหมด {total} รายการ</span>
             <label>
               แสดง{" "}
               <select
@@ -501,7 +523,7 @@ export function Registry({ user, config, refresh }) {
             </label>
             <button
               aria-label="หน้าก่อน"
-              disabled={currentPage === 1}
+              disabled={loading || currentPage === 1}
               onClick={() => setPage(currentPage - 1)}
             >
               <ChevronLeft size={17} />
@@ -511,7 +533,7 @@ export function Registry({ user, config, refresh }) {
             </span>
             <button
               aria-label="หน้าถัดไป"
-              disabled={currentPage >= pages}
+              disabled={loading || currentPage >= pages}
               onClick={() => setPage(currentPage + 1)}
             >
               <ChevronRight size={17} />
@@ -591,6 +613,46 @@ function PersonEditor({ person, readonly, config, user, onClose, onSaved }) {
   const [p, setP] = useState(() => structuredClone(person)),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
+  const [confirm, setConfirm] = useState(null);
+  const original = useRef(JSON.stringify(person));
+  const errorRef = useRef(null);
+  const dirty = !readonly && JSON.stringify(p) !== original.current;
+  useUnsavedChanges(dirty);
+  useEffect(() => {
+    if (error) {
+      errorRef.current?.focus();
+    }
+  }, [error]);
+  const savedRequests = new Set(person.requests.map((r) => r.id));
+  const savedPayments = new Set(
+    person.requests.flatMap((r) => r.payments.map((x) => x.id)),
+  );
+  function requestClose() {
+    if (busy) return;
+    if (dirty) setConfirm({ kind: "close" });
+    else onClose();
+  }
+  function discard() {
+    if (confirm.kind === "close") {
+      onClose();
+      return;
+    }
+    if (confirm.kind === "request")
+      update(
+        "requests",
+        p.requests.filter((r) => r.id !== confirm.id),
+      );
+    if (confirm.kind === "payment")
+      update(
+        "requests",
+        p.requests.map((r) =>
+          r.id === confirm.request
+            ? { ...r, payments: r.payments.filter((x) => x.id !== confirm.id) }
+            : r,
+        ),
+      );
+    setConfirm(null);
+  }
   const update = (key, value) => setP({ ...p, [key]: value });
   const changeRequest = (id, key, val) =>
     update(
@@ -627,323 +689,437 @@ function PersonEditor({ person, readonly, config, user, onClose, onSaved }) {
     />
   );
   return (
-    <Modal
-      title={
-        readonly
-          ? "รายละเอียดผู้ประสบปัญหา"
-          : p.id
-            ? "แก้ไขทะเบียนผู้ประสบปัญหา"
-            : "เพิ่มผู้ประสบปัญหาทางสังคม"
-      }
-      onClose={onClose}
-      wide
-    >
-      <form onSubmit={save}>
-        <ErrorBox error={error} />
-        <fieldset disabled={readonly || busy}>
-          <h3 className="section-title">ข้อมูลส่วนบุคคล</h3>
-          <div className="form-grid">
-            {input("เลขบัตรประชาชน · ไม่บังคับ", "nationalId")}
-            <Select
-              label="คำนำหน้า"
-              value={p.title}
-              onChange={(e) => update("title", e.target.value)}
-            >
-              {["นาย", "นาง", "นางสาว", "เด็กชาย", "เด็กหญิง", "อื่น ๆ"].map(
-                (v) => (
-                  <option key={v}>{v}</option>
-                ),
-              )}
-            </Select>
-            {input("ชื่อ *", "first", "text", true)}
-            {input("นามสกุล *", "last", "text", true)}
-            {input("วันเดือนปีเกิด · ค.ศ.", "birth", "date")}
-            <Field label="อายุ">
-              <input
-                value={age(p.birth) === null ? "ไม่ระบุ" : `${age(p.birth)} ปี`}
-                readOnly
-              />
-            </Field>
-            <Select
-              label="สถานภาพ"
-              value={p.marital}
-              onChange={(e) => update("marital", e.target.value)}
-            >
-              {[
-                "โสด",
-                "สมรสอยู่ด้วยกัน",
-                "สมรสแยกกันอยู่",
-                "ไม่สมรสแต่อยู่ด้วยกัน",
-                "หม้าย (คู่สมรสเสียชีวิต)",
-                "หย่าร้าง",
-              ].map((v) => (
-                <option key={v}>{v}</option>
-              ))}
-            </Select>
-            {input("โทรศัพท์มือถือ", "phone", "tel")}
+    <>
+      <Modal
+        title={
+          readonly
+            ? "รายละเอียดผู้ประสบปัญหา"
+            : p.id
+              ? "แก้ไขทะเบียนผู้ประสบปัญหา"
+              : "เพิ่มผู้ประสบปัญหาทางสังคม"
+        }
+        onClose={requestClose}
+        closeDisabled={busy}
+        wide
+      >
+        <form onSubmit={save}>
+          <div ref={errorRef} tabIndex={-1}>
+            <ErrorBox error={error} />
           </div>
-          <Field label="ความพิการ">
-            <div className="checkbox-grid">
-              <label>
-                <input
-                  type="checkbox"
-                  checked={!p.disabilities.length}
-                  onChange={() => update("disabilities", [])}
-                />
-                ไม่มีความพิการ
-              </label>
-              {disabilities.map((d) => (
-                <label key={d}>
-                  <input
-                    type="checkbox"
-                    checked={p.disabilities.includes(d)}
-                    onChange={(e) =>
-                      update(
-                        "disabilities",
-                        e.target.checked
-                          ? [...p.disabilities, d]
-                          : p.disabilities.filter((x) => x !== d),
-                      )
-                    }
-                  />
-                  {d}
-                </label>
-              ))}
-            </div>
-          </Field>
-          <h3 className="section-title">ที่อยู่ปัจจุบัน</h3>
-          <div className="form-grid">
-            {input("รหัสประจำบ้าน", "houseCode")}
-            {input("บ้านเลขที่", "house")}
-            <Select
-              label="หมู่บ้าน *"
-              value={p.village}
-              onChange={(e) => update("village", +e.target.value)}
-            >
-              {config.villages
-                .filter(
-                  (v) =>
-                    v.id === p.village ||
-                    (v.active &&
-                      can(user, p.id ? "edit" : "create", v.id) &&
-                      can(user, "view", v.id)),
-                )
-                .map((v) => (
-                  <option key={v.id} value={v.id}>
-                    หมู่ {v.id} บ้าน{v.name}
-                  </option>
-                ))}
-            </Select>
-          </div>
-          <div className="panel-title section-title">
-            <h3>สรุปสภาพปัญหาและคำขอรับความช่วยเหลือ</h3>
-            {!readonly && (
-              <button
-                type="button"
-                onClick={() =>
-                  update("requests", [
-                    ...p.requests,
-                    {
-                      id: crypto.randomUUID(),
-                      category: "0",
-                      type: "",
-                      note: "",
-                      date: today(),
-                      status: "pending",
-                      reason: "",
-                      payments: [],
-                    },
-                  ])
-                }
+          <fieldset disabled={readonly || busy}>
+            <h3 className="section-title">ข้อมูลส่วนบุคคล</h3>
+            <div className="form-grid">
+              {input("เลขบัตรประชาชน · ไม่บังคับ", "nationalId")}
+              <Select
+                label="คำนำหน้า"
+                value={p.title}
+                onChange={(e) => update("title", e.target.value)}
               >
-                <Plus size={16} />
-                เพิ่มคำขอ
-              </button>
-            )}
-          </div>
-          {!p.requests.length && (
-            <p className="muted">ยังไม่มีคำขอรับความช่วยเหลือ</p>
-          )}
-          {p.requests.map((r, index) => (
-            <section className="request-card" key={r.id}>
-              <div className="panel-title">
-                <h3>
-                  คำขอที่ {index + 1} · {categories[Number(r.category)]}
-                </h3>
-                <span className={"badge " + r.status}>
-                  {statuses[r.status]}
-                </span>
-              </div>
-              <div className="form-grid">
-                <Select
-                  label="หมวดหมู่"
-                  value={r.category}
-                  onChange={(e) => {
-                    update(
-                      "requests",
-                      p.requests.map((x) =>
-                        x.id === r.id
-                          ? { ...x, category: e.target.value, type: "" }
-                          : x,
-                      ),
-                    );
-                  }}
-                >
-                  {categories.map((c, i) => (
-                    <option key={c} value={String(i)}>
-                      {c}
-                    </option>
-                  ))}
-                </Select>
-                <Field label="ประเภทความช่วยเหลือ *">
-                  <input
-                    list={"types-" + r.id}
-                    value={r.type}
-                    required
-                    onChange={(e) =>
-                      changeRequest(r.id, "type", e.target.value)
-                    }
-                  />
-                  <datalist id={"types-" + r.id}>
-                    {config.types[Number(r.category)].items.map((t) => (
-                      <option key={t}>{t}</option>
-                    ))}
-                  </datalist>
-                </Field>
-                <Field label="วันที่ยื่นคำขอ · ค.ศ.">
-                  <input
-                    type="date"
-                    value={r.date}
-                    required
-                    onChange={(e) =>
-                      changeRequest(r.id, "date", e.target.value)
-                    }
-                  />
-                </Field>
-                <Select
-                  label="สถานะ"
-                  value={r.status}
-                  onChange={(e) =>
-                    changeRequest(r.id, "status", e.target.value)
+                {["นาย", "นาง", "นางสาว", "เด็กชาย", "เด็กหญิง", "อื่น ๆ"].map(
+                  (v) => (
+                    <option key={v}>{v}</option>
+                  ),
+                )}
+              </Select>
+              {input("ชื่อ *", "first", "text", true)}
+              {input("นามสกุล *", "last", "text", true)}
+              {input("วันเดือนปีเกิด · ค.ศ.", "birth", "date")}
+              <Field label="อายุ">
+                <input
+                  value={
+                    age(p.birth) === null ? "ไม่ระบุ" : `${age(p.birth)} ปี`
                   }
-                >
-                  {Object.entries(statuses).map(([s, l]) => (
-                    <option key={s} value={s}>
-                      {l}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-              <Field label="บันทึกสภาพปัญหาและรายละเอียดคำขอ">
-                <textarea
-                  value={r.note}
-                  onChange={(e) => changeRequest(r.id, "note", e.target.value)}
+                  readOnly
                 />
               </Field>
-              {closed.includes(r.status) && (
-                <Field label="เหตุผลยุติคำขอ *">
-                  <textarea
-                    value={r.reason}
-                    required
+              <Select
+                label="สถานภาพ"
+                value={p.marital}
+                onChange={(e) => update("marital", e.target.value)}
+              >
+                {[
+                  "โสด",
+                  "สมรสอยู่ด้วยกัน",
+                  "สมรสแยกกันอยู่",
+                  "ไม่สมรสแต่อยู่ด้วยกัน",
+                  "หม้าย (คู่สมรสเสียชีวิต)",
+                  "หย่าร้าง",
+                ].map((v) => (
+                  <option key={v}>{v}</option>
+                ))}
+              </Select>
+              {input("โทรศัพท์มือถือ", "phone", "tel")}
+            </div>
+            <Field label="ความพิการ">
+              <div className="checkbox-grid">
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={!p.disabilities.length}
+                    onChange={() => update("disabilities", [])}
+                  />
+                  ไม่มีความพิการ
+                </label>
+                {disabilities.map((d) => (
+                  <label key={d}>
+                    <input
+                      type="checkbox"
+                      checked={p.disabilities.includes(d)}
+                      onChange={(e) =>
+                        update(
+                          "disabilities",
+                          e.target.checked
+                            ? [...p.disabilities, d]
+                            : p.disabilities.filter((x) => x !== d),
+                        )
+                      }
+                    />
+                    {d}
+                  </label>
+                ))}
+              </div>
+            </Field>
+            <h3 className="section-title">ที่อยู่ปัจจุบัน</h3>
+            <div className="form-grid">
+              {input("รหัสประจำบ้าน", "houseCode")}
+              {input("บ้านเลขที่", "house")}
+              <Select
+                label="หมู่บ้าน *"
+                value={p.village}
+                onChange={(e) => update("village", +e.target.value)}
+              >
+                {config.villages
+                  .filter(
+                    (v) =>
+                      v.id === p.village ||
+                      (v.active &&
+                        can(user, p.id ? "edit" : "create", v.id) &&
+                        can(user, "view", v.id)),
+                  )
+                  .map((v) => (
+                    <option key={v.id} value={v.id}>
+                      หมู่ {v.id} บ้าน{v.name}
+                    </option>
+                  ))}
+              </Select>
+            </div>
+            <div className="panel-title section-title">
+              <h3>สรุปสภาพปัญหาและคำขอรับความช่วยเหลือ</h3>
+              {!readonly && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    update("requests", [
+                      ...p.requests,
+                      {
+                        id: crypto.randomUUID(),
+                        category: "0",
+                        type: "",
+                        note: "",
+                        date: today(),
+                        status: "pending",
+                        reason: "",
+                        payments: [],
+                      },
+                    ])
+                  }
+                >
+                  <Plus size={16} />
+                  เพิ่มคำขอ
+                </button>
+              )}
+            </div>
+            {!p.requests.length && (
+              <p className="muted">ยังไม่มีคำขอรับความช่วยเหลือ</p>
+            )}
+            {!!p.requests.length && (
+              <div className="request-overview" aria-label="สรุปคำขอ">
+                {p.requests.map((r, i) => (
+                  <article key={r.id}>
+                    <span className={"badge " + r.status}>
+                      {statuses[r.status]}
+                    </span>
+                    <h4>{categories[Number(r.category)]}</h4>
+                    <p>{r.type || "ยังไม่ระบุประเภท"}</p>
+                    <small>ช่วยเหลือ {r.payments.length} ครั้ง</small>
+                    <strong className="request-money">
+                      {sumMoney(r.payments) === null
+                        ? "ตรวจสอบจำนวนเงิน"
+                        : formatMoney(sumMoney(r.payments)) + " บาท"}
+                    </strong>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const heading = document.getElementById(
+                          "request-" + r.id,
+                        );
+                        heading?.focus();
+                        heading?.scrollIntoView({ block: "start" });
+                      }}
+                    >
+                      ไปที่คำขอที่ {i + 1}
+                    </button>
+                  </article>
+                ))}
+              </div>
+            )}
+            {p.requests.map((r, index) => (
+              <section className="request-card" key={r.id}>
+                <div className="panel-title">
+                  <h3 id={"request-" + r.id} tabIndex={-1}>
+                    คำขอที่ {index + 1} · {categories[Number(r.category)]}
+                  </h3>
+                  <div className="actions">
+                    <span className={"badge " + r.status}>
+                      {statuses[r.status]}
+                    </span>
+                    {!readonly && !savedRequests.has(r.id) && (
+                      <button
+                        type="button"
+                        className="danger"
+                        aria-label={`ลบคำขอที่ ${index + 1} ที่ยังไม่บันทึก`}
+                        onClick={() =>
+                          setConfirm({ kind: "request", id: r.id })
+                        }
+                      >
+                        <Trash2 size={15} />
+                        ลบรายการใหม่
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <div className="form-grid">
+                  <Select
+                    label="หมวดหมู่"
+                    value={r.category}
+                    onChange={(e) => {
+                      update(
+                        "requests",
+                        p.requests.map((x) =>
+                          x.id === r.id
+                            ? { ...x, category: e.target.value, type: "" }
+                            : x,
+                        ),
+                      );
+                    }}
+                  >
+                    {categories.map((c, i) => (
+                      <option key={c} value={String(i)}>
+                        {c}
+                      </option>
+                    ))}
+                  </Select>
+                  <Field label="ประเภทความช่วยเหลือ *">
+                    <input
+                      list={"types-" + r.id}
+                      value={r.type}
+                      required
+                      onChange={(e) =>
+                        changeRequest(r.id, "type", e.target.value)
+                      }
+                    />
+                    <datalist id={"types-" + r.id}>
+                      {config.types[Number(r.category)].items.map((t) => (
+                        <option key={t}>{t}</option>
+                      ))}
+                    </datalist>
+                  </Field>
+                  <Field label="วันที่ยื่นคำขอ · ค.ศ.">
+                    <input
+                      type="date"
+                      value={r.date}
+                      min={p.birth || undefined}
+                      max={today()}
+                      required
+                      onChange={(e) =>
+                        changeRequest(r.id, "date", e.target.value)
+                      }
+                    />
+                  </Field>
+                  <Select
+                    label="สถานะ"
+                    value={r.status}
                     onChange={(e) =>
-                      changeRequest(r.id, "reason", e.target.value)
+                      changeRequest(r.id, "status", e.target.value)
+                    }
+                  >
+                    {Object.entries(statuses).map(([s, l]) => (
+                      <option key={s} value={s}>
+                        {l}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+                <Field label="บันทึกสภาพปัญหาและรายละเอียดคำขอ">
+                  <textarea
+                    value={r.note}
+                    onChange={(e) =>
+                      changeRequest(r.id, "note", e.target.value)
                     }
                   />
                 </Field>
-              )}
-              <details open>
-                <summary>
-                  ประวัติการช่วยเหลือ · {r.payments.length} ครั้ง
-                </summary>
-                {r.payments.map((x, i) => (
-                  <div className="payment" key={x.id}>
-                    <strong>ครั้งที่ {i + 1}</strong>
-                    <div className="form-grid">
-                      {[
-                        ["วันที่ได้รับ", "date", "date"],
-                        ["หน่วยงานผู้ให้ *", "provider", "text"],
-                        ["จำนวนเงิน · บาท", "amount", "number"],
-                        ["จำนวนสิ่งของ", "quantity", "number"],
-                        ["หน่วยนับ", "unit", "text"],
-                      ].map(([label, key, type]) => (
-                        <Field
-                          key={key}
-                          label={label}
-                          type={type}
-                          min={type === "number" ? 0 : undefined}
-                          step={key === "amount" ? "0.01" : undefined}
-                          value={x[key] ?? ""}
-                          required={["date", "provider"].includes(key)}
+                {closed.includes(r.status) && (
+                  <Field label="เหตุผลยุติคำขอ *">
+                    <textarea
+                      value={r.reason}
+                      required
+                      onChange={(e) =>
+                        changeRequest(r.id, "reason", e.target.value)
+                      }
+                    />
+                  </Field>
+                )}
+                <details open>
+                  <summary>
+                    ประวัติการช่วยเหลือ · {r.payments.length} ครั้ง
+                  </summary>
+                  {r.payments.map((x, i) => (
+                    <div className="payment" key={x.id}>
+                      <div className="panel-title">
+                        <strong>ครั้งที่ {i + 1}</strong>
+                        {!readonly && !savedPayments.has(x.id) && (
+                          <button
+                            type="button"
+                            className="danger"
+                            aria-label={`ลบการช่วยเหลือครั้งที่ ${i + 1} ในคำขอที่ ${index + 1} ที่ยังไม่บันทึก`}
+                            onClick={() =>
+                              setConfirm({
+                                kind: "payment",
+                                id: x.id,
+                                request: r.id,
+                              })
+                            }
+                          >
+                            <Trash2 size={15} />
+                            ลบรายการใหม่
+                          </button>
+                        )}
+                      </div>
+                      <div className="form-grid">
+                        {[
+                          ["วันที่ได้รับ", "date", "date"],
+                          ["หน่วยงานผู้ให้ *", "provider", "text"],
+                          ["จำนวนเงิน · บาท", "amount", "number"],
+                          ["จำนวนสิ่งของ", "quantity", "number"],
+                          ["หน่วยนับ", "unit", "text"],
+                        ].map(([label, key, type]) => (
+                          <Field
+                            key={key}
+                            label={label}
+                            type={type}
+                            step={
+                              key === "amount"
+                                ? "0.01"
+                                : key === "quantity"
+                                  ? "any"
+                                  : undefined
+                            }
+                            max={
+                              key === "amount"
+                                ? 999999999.99
+                                : key === "date"
+                                  ? today()
+                                  : undefined
+                            }
+                            min={
+                              key === "date"
+                                ? r.date
+                                : type === "number"
+                                  ? 0
+                                  : undefined
+                            }
+                            value={x[key] ?? ""}
+                            required={["date", "provider"].includes(key)}
+                            onChange={(e) =>
+                              changeRequest(
+                                r.id,
+                                "payments",
+                                r.payments.map((y) =>
+                                  y.id === x.id
+                                    ? { ...y, [key]: e.target.value }
+                                    : y,
+                                ),
+                              )
+                            }
+                          />
+                        ))}
+                      </div>
+                      <Field label="รายละเอียดความช่วยเหลือ *">
+                        <textarea
+                          value={x.detail}
+                          required
                           onChange={(e) =>
                             changeRequest(
                               r.id,
                               "payments",
                               r.payments.map((y) =>
                                 y.id === x.id
-                                  ? { ...y, [key]: e.target.value }
+                                  ? { ...y, detail: e.target.value }
                                   : y,
                               ),
                             )
                           }
                         />
-                      ))}
+                      </Field>
                     </div>
-                    <Field label="รายละเอียดความช่วยเหลือ *">
-                      <textarea
-                        value={x.detail}
-                        required
-                        onChange={(e) =>
-                          changeRequest(
-                            r.id,
-                            "payments",
-                            r.payments.map((y) =>
-                              y.id === x.id
-                                ? { ...y, detail: e.target.value }
-                                : y,
-                            ),
-                          )
-                        }
-                      />
-                    </Field>
-                  </div>
-                ))}
-                {!readonly && (
-                  <button
-                    type="button"
-                    onClick={() =>
-                      changeRequest(r.id, "payments", [
-                        ...r.payments,
-                        {
-                          id: crypto.randomUUID(),
-                          date: today(),
-                          provider: "",
-                          detail: "",
-                          amount: "",
-                          quantity: "",
-                          unit: "",
-                        },
-                      ])
-                    }
-                  >
-                    <Plus size={16} />
-                    บันทึกการช่วยเหลือ
-                  </button>
-                )}
-              </details>
-            </section>
-          ))}
-        </fieldset>
-        <div className="modal-actions">
-          <button type="button" onClick={onClose}>
-            {readonly ? "ปิด" : "ยกเลิก"}
-          </button>
-          {!readonly && (
-            <button className="primary" disabled={busy}>
-              {busy ? "กำลังบันทึก…" : "บันทึกข้อมูล"}
+                  ))}
+                  {!readonly && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        changeRequest(r.id, "payments", [
+                          ...r.payments,
+                          {
+                            id: crypto.randomUUID(),
+                            date: today(),
+                            provider: "",
+                            detail: "",
+                            amount: "",
+                            quantity: "",
+                            unit: "",
+                          },
+                        ])
+                      }
+                    >
+                      <Plus size={16} />
+                      บันทึกการช่วยเหลือ
+                    </button>
+                  )}
+                </details>
+              </section>
+            ))}
+          </fieldset>
+          <div className="modal-actions">
+            <button type="button" disabled={busy} onClick={requestClose}>
+              {readonly ? "ปิด" : "ยกเลิก"}
             </button>
-          )}
-        </div>
-      </form>
-    </Modal>
+            {!readonly && (
+              <button className="primary" disabled={busy}>
+                {busy ? "กำลังบันทึก…" : "บันทึกข้อมูล"}
+              </button>
+            )}
+          </div>
+        </form>
+      </Modal>
+      {confirm && (
+        <ConfirmDialog
+          title={
+            confirm.kind === "close"
+              ? "ยังมีข้อมูลที่ไม่ได้บันทึก"
+              : "ลบรายการที่ยังไม่บันทึก"
+          }
+          description={
+            confirm.kind === "close"
+              ? "ข้อมูลที่แก้ไขในแบบฟอร์มนี้จะไม่ถูกบันทึก ต้องการละทิ้งการเปลี่ยนแปลงหรือไม่?"
+              : "รายการนี้ยังไม่ถูกบันทึกในระบบ ต้องการลบออกจากแบบฟอร์มหรือไม่?"
+          }
+          confirmText={
+            confirm.kind === "close" ? "ละทิ้งการเปลี่ยนแปลง" : "ลบรายการใหม่"
+          }
+          onCancel={() => setConfirm(null)}
+          onConfirm={discard}
+        />
+      )}
+    </>
   );
 }

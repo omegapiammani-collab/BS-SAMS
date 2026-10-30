@@ -1,11 +1,14 @@
+import { AuditHistory } from "./audit-history";
 import React, { useEffect, useState } from "react";
-import { Plus, Pencil, Save } from "lucide-react";
+import { Plus, Pencil, Save, KeyRound } from "lucide-react";
 import { api } from "./api";
 import { permissions, permissionLabels, categories } from "./domain";
 import { Modal, Field, Select, ErrorBox } from "./ui";
 export function UserAdmin({ config, me }) {
   const [users, setUsers] = useState([]),
     [edit, setEdit] = useState(null),
+    [reset, setReset] = useState(null),
+    [notice, setNotice] = useState(""),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
   async function load() {
@@ -24,6 +27,11 @@ export function UserAdmin({ config, me }) {
   return (
     <>
       <ErrorBox error={error} />
+      {notice && (
+        <p role="status" className="success">
+          {notice}
+        </p>
+      )}
       <section className="panel">
         <div className="panel-title">
           <h2>
@@ -78,15 +86,30 @@ export function UserAdmin({ config, me }) {
                     </span>
                   </td>
                   <td>
-                    <button
-                      onClick={() => {
-                        setError("");
-                        setEdit({ ...u, password: "" });
-                      }}
-                    >
-                      <Pencil size={16} />
-                      แก้ไขสิทธิ์
-                    </button>
+                    <div className="actions">
+                      <button
+                        onClick={() => {
+                          setError("");
+                          setEdit({ ...u });
+                        }}
+                      >
+                        <Pencil size={16} />
+                        แก้ไขสิทธิ์
+                      </button>
+                      {u.id !== me.id && (
+                        <button
+                          disabled={!u.active}
+                          onClick={() => {
+                            setError("");
+                            setReset(u);
+                          }}
+                          aria-label={"รีเซ็ตรหัสผ่าน " + u.username}
+                        >
+                          <KeyRound size={16} />
+                          รีเซ็ตรหัสผ่าน
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -97,7 +120,8 @@ export function UserAdmin({ config, me }) {
       {edit && (
         <Modal
           title={edit.id ? "แก้ไขบัญชีและสิทธิ์" : "เพิ่มบัญชีผู้ใช้งาน"}
-          onClose={() => setEdit(null)}
+          closeDisabled={busy}
+          onClose={() => !busy && setEdit(null)}
         >
           <form
             onSubmit={async (e) => {
@@ -139,20 +163,18 @@ export function UserAdmin({ config, me }) {
                 <option value="staff">เจ้าหน้าที่</option>
                 <option value="admin">ผู้ดูแลระบบ</option>
               </Select>
-              <Field
-                label={
-                  edit.id
-                    ? "รหัสชั่วคราวใหม่ · เว้นว่างหากไม่รีเซ็ต"
-                    : "รหัสผ่านชั่วคราว · อย่างน้อย 12 ตัวอักษร"
-                }
-                type="password"
-                value={edit.password}
-                required={!edit.id}
-                minLength={12}
-                maxLength={128}
-                autoComplete="new-password"
-                onChange={(e) => change("password", e.target.value)}
-              />
+              {!edit.id && (
+                <Field
+                  label="รหัสผ่านชั่วคราว · อย่างน้อย 12 ตัวอักษร"
+                  type="password"
+                  value={edit.password}
+                  required
+                  minLength={12}
+                  maxLength={128}
+                  autoComplete="new-password"
+                  onChange={(e) => change("password", e.target.value)}
+                />
+              )}
             </div>
             {edit.role === "staff" && (
               <>
@@ -223,11 +245,15 @@ export function UserAdmin({ config, me }) {
               </label>
             )}
             <p className="notice">
-              การรีเซ็ตรหัสผ่านจะบังคับให้ผู้ใช้ตั้งรหัสใหม่เมื่อเข้าสู่ระบบครั้งถัดไป
+              การรีเซ็ตรหัสผ่านใช้ปุ่มรีเซ็ตในตารางบัญชีผู้ใช้
               การปิดใช้งานบัญชีจะเก็บประวัติการทำรายการไว้
             </p>
             <div className="modal-actions">
-              <button type="button" onClick={() => setEdit(null)}>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => setEdit(null)}
+              >
                 ยกเลิก
               </button>
               <button className="primary" disabled={busy}>
@@ -237,6 +263,21 @@ export function UserAdmin({ config, me }) {
           </form>
         </Modal>
       )}
+      {reset && (
+        <ResetPasswordDialog
+          user={reset}
+          onClose={() => setReset(null)}
+          onSaved={() => {
+            setNotice(
+              "รีเซ็ตรหัสผ่านให้ " +
+                reset.username +
+                " แล้ว ผู้ใช้ต้องตั้งรหัสผ่านใหม่เมื่อเข้าสู่ระบบ",
+            );
+            setReset(null);
+            load();
+          }}
+        />
+      )}
     </>
   );
 }
@@ -245,14 +286,7 @@ export function SystemSettings({ config, onSaved }) {
     [error, setError] = useState(""),
     [saved, setSaved] = useState(false),
     [busy, setBusy] = useState(false),
-    [tab, setTab] = useState("general"),
-    [audit, setAudit] = useState([]);
-  useEffect(() => {
-    if (tab === "audit")
-      api("/audit")
-        .then(setAudit)
-        .catch((e) => setError(e.message));
-  }, [tab]);
+    [tab, setTab] = useState("general");
   async function save(e) {
     e.preventDefault();
     setBusy(true);
@@ -286,190 +320,232 @@ export function SystemSettings({ config, onSaved }) {
           </button>
         ))}
       </div>
-      <section className="panel">
-        <form onSubmit={save}>
-          <ErrorBox error={error} />
-          {saved && (
-            <p role="status" className="success">
-              บันทึกการตั้งค่าเรียบร้อยแล้ว
-            </p>
-          )}
-          {tab === "general" ? (
-            <>
-              <h2>ข้อมูลทั่วไป</h2>
-              <Field
-                label="ชื่อระบบ"
-                value={c.name}
-                required
-                onChange={(e) => setC({ ...c, name: e.target.value })}
-              />
-              <Field label="โลโก้ระบบ · PNG, JPEG, WebP ไม่เกิน 200 KB">
-                <input
-                  type="file"
-                  accept="image/png,image/jpeg,image/webp"
-                  onChange={(e) => {
-                    const f = e.target.files[0];
-                    if (!f) return;
-                    if (f.size > 200000) {
-                      setError("โลโก้ต้องไม่เกิน 200 KB");
-                      return;
-                    }
-                    const reader = new FileReader();
-                    reader.onload = () => setC({ ...c, logo: reader.result });
-                    reader.readAsDataURL(f);
-                  }}
+      {tab === "audit" ? (
+        <AuditHistory />
+      ) : (
+        <section className="panel">
+          <form onSubmit={save}>
+            <ErrorBox error={error} />
+            {saved && (
+              <p role="status" className="success">
+                บันทึกการตั้งค่าเรียบร้อยแล้ว
+              </p>
+            )}
+            {tab === "general" ? (
+              <>
+                <h2>ข้อมูลทั่วไป</h2>
+                <Field
+                  label="ชื่อระบบ"
+                  value={c.name}
+                  required
+                  onChange={(e) => setC({ ...c, name: e.target.value })}
                 />
-              </Field>
-              {c.logo && (
-                <div className="actions">
-                  <img
-                    className="logo-preview"
-                    src={c.logo}
-                    alt="ตัวอย่างโลโก้"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setC({ ...c, logo: "" })}
-                  >
-                    ลบโลโก้
-                  </button>
-                </div>
-              )}
-              <p className="muted">
-                กองสวัสดิการสังคม องค์การบริหารส่วนตำบลบ้านเสด็จ
-              </p>
-            </>
-          ) : tab === "villages" ? (
-            <>
-              <h2>หมู่บ้านในตำบลบ้านเสด็จ</h2>
-              <p className="notice">
-                การปิดใช้งานจะซ่อนหมู่บ้านจากการเพิ่มทะเบียนใหม่
-                โดยเก็บข้อมูลเดิมและประวัติไว้
-              </p>
-              {c.villages.map((v, i) => (
-                <div className="setting-row" key={v.id}>
-                  <strong>หมู่ {v.id}</strong>
+                <Field label="โลโก้ระบบ · PNG, JPEG, WebP ไม่เกิน 200 KB">
                   <input
-                    aria-label={"ชื่อหมู่ " + v.id}
-                    value={v.name}
-                    required
-                    onChange={(e) =>
-                      setC({
-                        ...c,
-                        villages: c.villages.map((x, j) =>
-                          i === j ? { ...x, name: e.target.value } : x,
-                        ),
-                      })
-                    }
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    onChange={(e) => {
+                      const f = e.target.files[0];
+                      if (!f) return;
+                      if (f.size > 200000) {
+                        setError("โลโก้ต้องไม่เกิน 200 KB");
+                        return;
+                      }
+                      const reader = new FileReader();
+                      reader.onload = () => setC({ ...c, logo: reader.result });
+                      reader.readAsDataURL(f);
+                    }}
                   />
-                  <label className="check">
+                </Field>
+                {c.logo && (
+                  <div className="actions">
+                    <img
+                      className="logo-preview"
+                      src={c.logo}
+                      alt="ตัวอย่างโลโก้"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setC({ ...c, logo: "" })}
+                    >
+                      ลบโลโก้
+                    </button>
+                  </div>
+                )}
+                <p className="muted">
+                  กองสวัสดิการสังคม องค์การบริหารส่วนตำบลบ้านเสด็จ
+                </p>
+              </>
+            ) : tab === "villages" ? (
+              <>
+                <h2>หมู่บ้านในตำบลบ้านเสด็จ</h2>
+                <p className="notice">
+                  การปิดใช้งานจะซ่อนหมู่บ้านจากการเพิ่มทะเบียนใหม่
+                  โดยเก็บข้อมูลเดิมและประวัติไว้
+                </p>
+                {c.villages.map((v, i) => (
+                  <div className="setting-row" key={v.id}>
+                    <strong>หมู่ {v.id}</strong>
                     <input
-                      type="checkbox"
-                      checked={v.active}
+                      aria-label={"ชื่อหมู่ " + v.id}
+                      value={v.name}
+                      required
                       onChange={(e) =>
                         setC({
                           ...c,
                           villages: c.villages.map((x, j) =>
-                            i === j ? { ...x, active: e.target.checked } : x,
+                            i === j ? { ...x, name: e.target.value } : x,
                           ),
                         })
                       }
                     />
-                    ใช้งาน
-                  </label>
-                </div>
-              ))}
-              <button
-                type="button"
-                onClick={() =>
-                  setC({
-                    ...c,
-                    villages: [
-                      ...c.villages,
-                      {
-                        id: Math.max(...c.villages.map((v) => v.id)) + 1,
-                        name: "หมู่บ้านใหม่",
-                        active: true,
-                      },
-                    ],
-                  })
-                }
-              >
-                <Plus size={16} />
-                เพิ่มหมู่บ้าน
-              </button>
-            </>
-          ) : tab === "types" ? (
-            <>
-              <h2>ประเภทความช่วยเหลือ</h2>
-              <p className="notice">
-                แก้ไขรายการประเภทได้ หมวดหมู่หลักคงเดิม
-                การแก้ไขไม่เปลี่ยนประวัติคำขอที่บันทึกไว้แล้ว
-              </p>
-              {c.types.map((t, i) => (
-                <Field
-                  key={t.id}
-                  label={categories[i] + " · หนึ่งประเภทต่อหนึ่งบรรทัด"}
+                    <label className="check">
+                      <input
+                        type="checkbox"
+                        checked={v.active}
+                        onChange={(e) =>
+                          setC({
+                            ...c,
+                            villages: c.villages.map((x, j) =>
+                              i === j ? { ...x, active: e.target.checked } : x,
+                            ),
+                          })
+                        }
+                      />
+                      ใช้งาน
+                    </label>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={() =>
+                    setC({
+                      ...c,
+                      villages: [
+                        ...c.villages,
+                        {
+                          id: Math.max(...c.villages.map((v) => v.id)) + 1,
+                          name: "หมู่บ้านใหม่",
+                          active: true,
+                        },
+                      ],
+                    })
+                  }
                 >
-                  <textarea
-                    rows={Math.max(3, t.items.length)}
-                    value={t.items.join("\n")}
-                    onChange={(e) =>
-                      setC({
-                        ...c,
-                        types: c.types.map((x, j) =>
-                          i === j
-                            ? { ...x, items: e.target.value.split("\n") }
-                            : x,
-                        ),
-                      })
-                    }
-                  />
-                </Field>
-              ))}
-            </>
-          ) : (
-            <>
-              <h2>ประวัติการใช้งานล่าสุด 200 รายการ</h2>
-              <div className="table-scroll">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>เวลา</th>
-                      <th>ผู้ใช้งาน</th>
-                      <th>การดำเนินการ</th>
-                      <th>รหัสรายการ</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {audit.map((a) => (
-                      <tr key={a.id}>
-                        <td>
-                          {new Date(a.created_at + "Z").toLocaleString(
-                            "th-TH",
-                            { timeZone: "Asia/Bangkok" },
-                          )}
-                        </td>
-                        <td>{a.username || a.actor}</td>
-                        <td>{a.action}</td>
-                        <td>{a.target}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                  <Plus size={16} />
+                  เพิ่มหมู่บ้าน
+                </button>
+              </>
+            ) : tab === "types" ? (
+              <>
+                <h2>ประเภทความช่วยเหลือ</h2>
+                <p className="notice">
+                  แก้ไขรายการประเภทได้ หมวดหมู่หลักคงเดิม
+                  การแก้ไขไม่เปลี่ยนประวัติคำขอที่บันทึกไว้แล้ว
+                </p>
+                {c.types.map((t, i) => (
+                  <Field
+                    key={t.id}
+                    label={categories[i] + " · หนึ่งประเภทต่อหนึ่งบรรทัด"}
+                  >
+                    <textarea
+                      rows={Math.max(3, t.items.length)}
+                      value={t.items.join("\n")}
+                      onChange={(e) =>
+                        setC({
+                          ...c,
+                          types: c.types.map((x, j) =>
+                            i === j
+                              ? { ...x, items: e.target.value.split("\n") }
+                              : x,
+                          ),
+                        })
+                      }
+                    />
+                  </Field>
+                ))}
+              </>
+            ) : null}
+            {tab !== "audit" && (
+              <div className="modal-actions">
+                <button className="primary" disabled={busy}>
+                  <Save size={17} />
+                  {busy ? "กำลังบันทึก…" : "บันทึกการตั้งค่า"}
+                </button>
               </div>
-            </>
-          )}
-          {tab !== "audit" && (
-            <div className="modal-actions">
-              <button className="primary" disabled={busy}>
-                <Save size={17} />
-                {busy ? "กำลังบันทึก…" : "บันทึกการตั้งค่า"}
-              </button>
-            </div>
-          )}
-        </form>
-      </section>
+            )}
+          </form>
+        </section>
+      )}
     </>
+  );
+}
+
+function ResetPasswordDialog({ user, onClose, onSaved }) {
+  const [error, setError] = useState(""),
+    [busy, setBusy] = useState(false);
+  async function save(e) {
+    e.preventDefault();
+    const b = Object.fromEntries(new FormData(e.currentTarget));
+    setError("");
+    if (b.password !== b.confirm) {
+      setError("รหัสผ่านชั่วคราวไม่ตรงกัน");
+      return;
+    }
+    setBusy(true);
+    try {
+      await api("/users/" + user.id + "/reset-password", "POST", {
+        password: b.password,
+      });
+      onSaved();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <Modal
+      title={"รีเซ็ตรหัสผ่าน · " + user.username}
+      closeDisabled={busy}
+      onClose={() => !busy && onClose()}
+    >
+      <p className="notice">
+        รหัสผ่านเดิมจะใช้ไม่ได้และระบบจะออกจากระบบทุกอุปกรณ์
+        ผู้ใช้ต้องเปลี่ยนรหัสผ่านชั่วคราวเมื่อเข้าสู่ระบบครั้งถัดไป
+        กรุณาส่งรหัสผ่านให้เจ้าของบัญชีผ่านช่องทางที่เหมาะสม
+      </p>
+      <form onSubmit={save}>
+        <ErrorBox error={error} />
+        <fieldset disabled={busy}>
+          <Field
+            label="รหัสผ่านชั่วคราวใหม่"
+            name="password"
+            type="password"
+            minLength={12}
+            maxLength={128}
+            required
+            autoComplete="new-password"
+          />
+          <Field
+            label="ยืนยันรหัสผ่านชั่วคราว"
+            name="confirm"
+            type="password"
+            minLength={12}
+            maxLength={128}
+            required
+            autoComplete="new-password"
+          />
+        </fieldset>
+        <div className="modal-actions">
+          <button type="button" disabled={busy} onClick={onClose}>
+            ยกเลิก
+          </button>
+          <button className="primary" disabled={busy}>
+            {busy ? "กำลังรีเซ็ต…" : "ยืนยันรีเซ็ตรหัสผ่าน"}
+          </button>
+        </div>
+      </form>
+    </Modal>
   );
 }
