@@ -207,31 +207,22 @@ export function Registry({ user, config, refresh }) {
         <div className="actions">
           {!trash && (
             <>
-              <button
-                disabled={
-                  busy ||
-                  loading ||
-                  total === 0 ||
-                  (user.role !== "admin" &&
-                    !user.permissions.includes("export"))
-                }
-                onClick={() => exportData("csv")}
-              >
-                <Download size={16} />
-                CSV
-              </button>
-              <button
-                disabled={
-                  busy ||
-                  loading ||
-                  total === 0 ||
-                  (user.role !== "admin" &&
-                    !user.permissions.includes("export"))
-                }
-                onClick={() => exportData("xlsx")}
-              >
-                Excel
-              </button>
+              {["csv", "xlsx", "pdf"].map((format) => (
+                <button
+                  key={format}
+                  disabled={
+                    busy ||
+                    loading ||
+                    total === 0 ||
+                    (user.role !== "admin" &&
+                      !user.permissions.includes("export"))
+                  }
+                  onClick={() => exportData(format)}
+                >
+                  <Download size={16} />
+                  {format === "xlsx" ? "Excel" : format.toUpperCase()}
+                </button>
+              ))}
               {(user.role === "admin" ||
                 (user.permissions.includes("create") &&
                   user.permissions.includes("view") &&
@@ -1014,16 +1005,8 @@ function PersonEditor({ person, readonly, config, user, onClose, onSaved }) {
                       <Select
                         label="หมวดหมู่"
                         value={r.category}
-                        onChange={(e) => {
-                          update(
-                            "requests",
-                            p.requests.map((x) =>
-                              x.id === r.id
-                                ? { ...x, category: e.target.value, type: "" }
-                                : x,
-                            ),
-                          );
-                        }}
+                        disabled
+                        title="หมวดหมู่ถูกกำหนดจากปุ่มเพิ่มคำขอและไม่สามารถเปลี่ยนได้"
                       >
                         {categories.map((c, i) => (
                           <option key={c} value={String(i)}>

@@ -300,6 +300,9 @@ export async function downloadRows(rows, format, name) {
       ],
       { type: "text/csv;charset=utf-8" },
     );
+  } else if (format === "pdf") {
+    const { pdfBlob } = await import("./pdf-export.js");
+    blob = await pdfBlob(rows, name);
   } else {
     const { default: ExcelJS } = await import("exceljs");
     const workbook = new ExcelJS.Workbook();
@@ -314,7 +317,7 @@ export async function downloadRows(rows, format, name) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `${name}.${format === "csv" ? "csv" : "xlsx"}`;
+  a.download = `${name}.${format}`;
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
@@ -453,7 +456,7 @@ export function Reports({ user, config, range, setRange }) {
             {type === "category" ? "ตามประเภทความช่วยเหลือ" : "รายหมู่บ้าน"}
           </h2>
           <div className="actions">
-            {["csv", "xlsx"].map((f) => (
+            {["csv", "xlsx", "pdf"].map((f) => (
               <button
                 key={f}
                 disabled={

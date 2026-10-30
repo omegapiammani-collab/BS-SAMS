@@ -1,7 +1,13 @@
 import { chromium } from "@playwright/test";
 import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
-import { writeFileSync, unlinkSync, mkdtempSync, rmSync } from "node:fs";
+import {
+  readFileSync,
+  writeFileSync,
+  unlinkSync,
+  mkdtempSync,
+  rmSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createServer } from "node:net";
@@ -133,11 +139,31 @@ try {
         400,
       );
     }
-    await page.getByLabel("รหัสผ่านปัจจุบัน").fill(pass);
+    assert.equal(await page.getByLabel("รหัสผ่านปัจจุบัน").inputValue(), pass);
+    assert.equal(
+      await page.getByLabel("รหัสผ่านปัจจุบัน").evaluate((el) => el.readOnly),
+      true,
+    );
+    assert.equal(
+      await page.getByLabel("รหัสผ่านใหม่ อย่างน้อย").inputValue(),
+      "",
+    );
+    assert.equal(await page.getByLabel("ยืนยันรหัสผ่านใหม่").inputValue(), "");
     await page.getByLabel("รหัสผ่านใหม่ อย่างน้อย").fill(nextPass);
     await page.getByLabel("ยืนยันรหัสผ่านใหม่").fill(nextPass);
     await page.getByRole("button", { name: "บันทึกรหัสผ่านใหม่" }).click();
-    await page.getByLabel("ชื่อผู้ใช้", { exact: true }).fill("qa-admin");
+    assert.equal(
+      await page.getByLabel("รหัสผ่าน", { exact: true }).inputValue(),
+      "",
+    );
+    assert.equal(
+      await page.getByLabel("ชื่อผู้ใช้", { exact: true }).inputValue(),
+      "qa-admin",
+    );
+    assert.notEqual(
+      await page.getByLabel("ชื่อผู้ใช้", { exact: true }).inputValue(),
+      nextPass,
+    );
     await page.getByLabel("รหัสผ่าน", { exact: true }).fill(nextPass);
     await page
       .getByRole("button", { name: "เข้าสู่ระบบ", exact: true })
@@ -234,12 +260,20 @@ try {
       .getByRole("button", { name: "เพิ่มคำขอ เงินสงเคราะห์", exact: true })
       .click();
     assert.equal(
+      await page.getByLabel("หมวดหมู่", { exact: true }).isDisabled(),
+      true,
+    );
+    assert.equal(
       await page.getByLabel("หมวดหมู่", { exact: true }).inputValue(),
       "0",
     );
     await page
       .getByRole("button", { name: "เพิ่มคำขอ เงินซ่อมบ้าน", exact: true })
       .click();
+    assert.equal(
+      await page.getByLabel("หมวดหมู่", { exact: true }).isDisabled(),
+      true,
+    );
     assert.equal(
       await page.getByLabel("หมวดหมู่", { exact: true }).inputValue(),
       "1",
@@ -323,6 +357,15 @@ try {
     assert.equal(p.birth, "1990-01-01");
     assert.equal(p.requests[0].payments[0].amount, "3000");
     assert.equal(p.requests[0].payments[0].detail, "");
+    assert.equal(
+      (
+        await call("/people/" + p.id, "PUT", {
+          ...p,
+          requests: [{ ...p.requests[0], category: "1" }],
+        })
+      ).status,
+      400,
+    );
     const moneySummary = (await call("/summary?from=2026-10-01&to=2027-09-30"))
       .data;
     assert.equal(moneySummary.amount, 3000.3);
@@ -411,6 +454,10 @@ try {
         .getByLabel("ประเภทความช่วยเหลือ *", { exact: true })
         .inputValue(),
       p.requests[0].type,
+    );
+    assert.equal(
+      await page.getByLabel("หมวดหมู่", { exact: true }).isDisabled(),
+      true,
     );
     assert.equal(
       await page.getByLabel("หมวดหมู่", { exact: true }).inputValue(),
@@ -529,6 +576,22 @@ try {
     const book = new ExcelJS.Workbook();
     await book.xlsx.readFile("/tmp/bs-sams-qa.xlsx");
     assert.equal(book.worksheets[0].rowCount, 2);
+    const registryPdfDownload = page.waitForEvent("download");
+    await page.getByRole("button", { name: "PDF", exact: true }).click();
+    const registryPdf = await registryPdfDownload;
+    assert.ok(registryPdf.suggestedFilename().endsWith(".pdf"));
+    await registryPdf.saveAs("/tmp/bs-sams-registry.pdf");
+    assert.equal(
+      readFileSync("/tmp/bs-sams-registry.pdf").subarray(0, 5).toString(),
+      "%PDF-",
+    );
+    const registryPdfText = execFileSync(
+      "pdftotext",
+      ["-raw", "/tmp/bs-sams-registry.pdf", "-"],
+      { encoding: "utf8" },
+    ).replace(/\s/g, "");
+    assert.ok(registryPdfText.includes("บุคคลทดสอบ"));
+
     assert.equal(book.worksheets[0].getRow(2).getCell(3).value, "บุคคลทดสอบ");
     assert.equal(
       typeof book.worksheets[0].getRow(2).getCell(7).value,
@@ -633,6 +696,22 @@ try {
     });
     assert.equal(moneyRow.getCell(6).value, 3000.3);
     assert.equal(moneyRow.getCell(6).type, ExcelJS.ValueType.Number);
+    const summaryPdfDownload = page.waitForEvent("download");
+    await page.getByRole("button", { name: "PDF", exact: true }).click();
+    await (await summaryPdfDownload).saveAs("/tmp/bs-sams-summary.pdf");
+    const summaryPdfText = execFileSync(
+      "pdftotext",
+      ["-raw", "/tmp/bs-sams-summary.pdf", "-"],
+      { encoding: "utf8" },
+    ).replace(/\s/g, "");
+    assert.ok(
+      execFileSync("pdfinfo", ["/tmp/bs-sams-summary.pdf"], {
+        encoding: "utf8",
+      }).includes("รายงานผู้ประสบปัญหา"),
+    );
+    assert.ok(summaryPdfText.includes("เงินสงเคราะห์"));
+    assert.ok(summaryPdfText.includes("3000.3"));
+    assert.equal(summaryPdfText.includes("บุคคลทดสอบ"), false);
 
     assert.equal(
       (await call("/summary?from=2026-02-30&to=2026-03-01")).status,
@@ -806,6 +885,17 @@ try {
     await (await filteredDownload).saveAs("/tmp/bs-sams-filtered.xlsx");
     const filteredBook = new ExcelJS.Workbook();
     await filteredBook.xlsx.readFile("/tmp/bs-sams-filtered.xlsx");
+    const filteredPdfDownload = page.waitForEvent("download");
+    await page.getByRole("button", { name: "PDF", exact: true }).click();
+    await (await filteredPdfDownload).saveAs("/tmp/bs-sams-filtered.pdf");
+    const filteredPdfText = execFileSync(
+      "pdftotext",
+      ["-raw", "/tmp/bs-sams-filtered.pdf", "-"],
+      { encoding: "utf8" },
+    ).replace(/\s/g, "");
+    assert.ok(filteredPdfText.includes("ทดสอบแบ่งหน้า11"));
+    assert.equal(filteredPdfText.includes("บุคคลทดสอบ"), false);
+
     assert.equal(filteredBook.worksheets[0].rowCount, 15);
     await page.getByLabel("หมู่บ้าน", { exact: true }).selectOption("1");
     await page
@@ -1118,6 +1208,14 @@ try {
       .filter({ hasText: "เปลี่ยนรหัสผ่านเรียบร้อยแล้ว" })
       .waitFor();
     assert.equal((await call("/me")).status, 401);
+    assert.equal(
+      await page.getByLabel("ชื่อผู้ใช้", { exact: true }).inputValue(),
+      "qa-admin",
+    );
+    assert.equal(
+      await page.getByLabel("รหัสผ่าน", { exact: true }).inputValue(),
+      "",
+    );
     assert.equal(
       (await otherDevice.request.get(origin + "/api/me")).status(),
       401,

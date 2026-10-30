@@ -339,6 +339,8 @@ export function validatePersonUpdate(next, previous) {
     const current = requests.get(old.id);
     if (!current)
       return "ไม่สามารถลบคำขอที่บันทึกแล้ว กรุณาเปลี่ยนสถานะพร้อมเหตุผลแทน";
+    if (current.category !== old.category)
+      return "ไม่สามารถเปลี่ยนหมวดหมู่ของคำขอที่บันทึกแล้ว";
     const payments = new Set(current.payments.map((p) => p.id));
     if (old.payments.some((p) => !payments.has(p.id)))
       return "ไม่สามารถลบประวัติการช่วยเหลือที่บันทึกแล้ว";

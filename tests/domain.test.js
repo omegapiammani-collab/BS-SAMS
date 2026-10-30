@@ -222,3 +222,22 @@ test("malformed nested records and duplicate payment identities are rejected", (
   p.requests[0].payments[0].detail = "";
   assert.equal(validatePerson(p, defaultConfig), null);
 });
+
+test("saved request categories are immutable while separate new requests are allowed", () => {
+  const request = { id: "r1", category: "0", payments: [] };
+  const previous = { requests: [request] };
+  assert.match(
+    validatePersonUpdate(
+      { requests: [{ ...request, category: "1" }] },
+      previous,
+    ),
+    /หมวดหมู่/,
+  );
+  assert.equal(
+    validatePersonUpdate(
+      { requests: [request, { id: "r2", category: "1", payments: [] }] },
+      previous,
+    ),
+    null,
+  );
+});

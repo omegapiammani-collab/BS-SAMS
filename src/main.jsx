@@ -50,7 +50,11 @@ const nav = [
   ["users", "จัดการผู้ใช้งาน", Shield],
   ["settings", "ตั้งค่าระบบ", Settings],
 ];
-function Login({ onLogin, change = false, notice = "" }) {
+function Login({ onLogin, change = false, notice = "", username = "" }) {
+  const [loginPassword, setLoginPassword] = useState("");
+  useEffect(() => {
+    if (!change) setLoginPassword("");
+  }, [change]);
   const [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
   async function submit(e) {
@@ -62,8 +66,13 @@ function Login({ onLogin, change = false, notice = "" }) {
       if (change) {
         if (b.password !== b.confirm) throw Error("รหัสผ่านใหม่ไม่ตรงกัน");
         await api("/password", "POST", b);
+        setLoginPassword("");
         onLogin(null);
-      } else onLogin(await api("/login", "POST", b));
+      } else {
+        const user = await api("/login", "POST", b);
+        setLoginPassword(user.mustChange ? b.password : "");
+        onLogin(user);
+      }
     } catch (e) {
       setError(e.message);
     } finally {
@@ -104,14 +113,23 @@ function Login({ onLogin, change = false, notice = "" }) {
             {notice}
           </p>
         )}
-        <form onSubmit={submit}>
+        <form key={change ? "change-password" : "login"} onSubmit={submit}>
           <ErrorBox error={error} />
           {change ? (
             <>
+              <input
+                type="hidden"
+                name="username"
+                autoComplete="username"
+                value={username}
+                readOnly
+              />
               <Field
                 label="รหัสผ่านปัจจุบัน"
                 name="current"
                 type="password"
+                defaultValue={loginPassword}
+                readOnly={!!loginPassword}
                 required
                 autoComplete="current-password"
               />
@@ -137,6 +155,7 @@ function Login({ onLogin, change = false, notice = "" }) {
               <Field
                 label="ชื่อผู้ใช้"
                 name="username"
+                defaultValue={username}
                 required
                 autoComplete="username"
               />
@@ -166,6 +185,7 @@ function Login({ onLogin, change = false, notice = "" }) {
   );
 }
 function App() {
+  const [loginUsername, setLoginUsername] = useState("");
   const [user, setUser] = useState(undefined),
     [config, setConfig] = useState(defaultConfig),
     [page, setPage] = useState("dashboard"),
@@ -194,8 +214,10 @@ function App() {
   if (!user || user.mustChange)
     return (
       <Login
+        username={user?.username || loginUsername}
         notice={notice}
         onLogin={(u) => {
+          setLoginUsername(u?.username || user?.username || loginUsername);
           setUser(u);
           setPage("dashboard");
           setMenu(false);
@@ -219,6 +241,7 @@ function App() {
           onSaved={() => {
             setPasswordOpen(false);
             setNotice("เปลี่ยนรหัสผ่านเรียบร้อยแล้ว กรุณาเข้าสู่ระบบอีกครั้ง");
+            setLoginUsername(user.username);
             setUser(null);
             setPage("dashboard");
           }}
