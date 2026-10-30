@@ -12,7 +12,7 @@ Deletion is recoverable with actor, reason and date. User accounts are deactivat
 
 No file attachments, case follow-up scheduling, data import, public registration, or automatic deployment are included. A system logo is the sole image upload and is stored as a limited-size raster data URI.
 
-Before production: create a real D1 database and replace the local placeholder binding, provision the initial administrator securely, test backup/restore and organization data-retention procedures, and verify data-location requirements for sensitive records. No Cloudflare resources have been created or deployed by this task.
+The D1 binding uses the database ID supplied by the project owner. Verify that it belongs to the account deploying the Worker, apply remote migrations, and provision the initial administrator securely before use. Test backup/restore and organization data-retention procedures, and verify data-location requirements for sensitive records. A dry-run validates packaging, not access to the remote D1 database. No remote migrations or Worker deployments have been run by this task.
 
 A person is fully helped only when every request is done. Mixed done and closed requests count as partially helped. A person whose requests are all closed is classified as closed even when an earlier assistance event exists. The registry uses the shared domain function; report SQL is checked against the original JavaScript calculation for the same status rules.
 
