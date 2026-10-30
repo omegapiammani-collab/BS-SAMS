@@ -1804,3 +1804,12 @@ footer,
   color: #057855;
   font-weight: 600;
 }
+
+.request-group-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+.request-group-actions button {
+  font-size: 13px;
+}

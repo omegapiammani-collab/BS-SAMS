@@ -839,12 +839,6 @@ function PersonEditor({ person, readonly, config, user, onClose, onSaved }) {
             </fieldset>
             <div className="panel-title section-title">
               <h3>สรุปสภาพปัญหาและคำขอรับความช่วยเหลือ</h3>
-              {!readonly && (
-                <button type="button" onClick={() => addRequest()}>
-                  <Plus size={16} />
-                  เพิ่มคำขอ
-                </button>
-              )}
             </div>
             {!p.requests.length && (
               <p className="muted">ยังไม่มีคำขอรับความช่วยเหลือ</p>
@@ -864,6 +858,20 @@ function PersonEditor({ person, readonly, config, user, onClose, onSaved }) {
                       {category}
                       <span>{requests.length} คำขอ</span>
                     </summary>
+                    {!readonly && (
+                      <div className="request-group-actions">
+                        <button
+                          type="button"
+                          aria-label={`เพิ่มคำขอ ${category}`}
+                          onClick={() =>
+                            addRequest({ category: String(categoryIndex) })
+                          }
+                        >
+                          <Plus size={16} />
+                          เพิ่มคำขอ
+                        </button>
+                      </div>
+                    )}
                     {requests.length ? (
                       <div className="request-grid">
                         {requests.map((r) => {

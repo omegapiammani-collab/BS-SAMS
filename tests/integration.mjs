@@ -226,8 +226,30 @@ try {
       true,
     );
 
-    await page.getByRole("button", { name: "เพิ่มคำขอ", exact: true }).click();
-    await page.getByRole("button", { name: "เพิ่มคำขอ", exact: true }).click();
+    assert.equal(
+      await page.getByRole("button", { name: /^เพิ่มคำขอ / }).count(),
+      7,
+    );
+    await page
+      .getByRole("button", { name: "เพิ่มคำขอ เงินสงเคราะห์", exact: true })
+      .click();
+    assert.equal(
+      await page.getByLabel("หมวดหมู่", { exact: true }).inputValue(),
+      "0",
+    );
+    await page
+      .getByRole("button", { name: "เพิ่มคำขอ เงินซ่อมบ้าน", exact: true })
+      .click();
+    assert.equal(
+      await page.getByLabel("หมวดหมู่", { exact: true }).inputValue(),
+      "1",
+    );
+    assert.equal(
+      await page
+        .getByLabel("ประเภทความช่วยเหลือ *", { exact: true })
+        .inputValue(),
+      "",
+    );
     await page
       .getByRole("button", { name: "ลบคำขอที่ 2 ที่ยังไม่บันทึก", exact: true })
       .click();
@@ -429,6 +451,10 @@ try {
     await page
       .getByRole("button", { name: "ดู บุคคลทดสอบ", exact: true })
       .click();
+    assert.equal(
+      await page.getByRole("button", { name: /^เพิ่มคำขอ / }).count(),
+      0,
+    );
     await page
       .getByRole("button", { name: "ไปที่คำขอที่ 1", exact: true })
       .click();
