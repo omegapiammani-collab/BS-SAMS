@@ -4,6 +4,7 @@ export const auditActions = {
   "delete-request": "ลบคำขอความช่วยเหลือ",
   "delete-assistance": "ลบประวัติการช่วยเหลือ",
   "delete-person": "ย้ายทะเบียนเข้าถังขยะ",
+  "purge-person": "ลบทะเบียนบุคคลถาวร",
   restore: "กู้คืนทะเบียนบุคคล",
   "export-person": "ส่งออกรายละเอียดรายบุคคล",
   export: "ส่งออกทะเบียนบุคคล",

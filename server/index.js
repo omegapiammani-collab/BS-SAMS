@@ -303,6 +303,27 @@ export default {
         await audit(db, u, "export-person", stored.id).run();
         return json(personFromRow(stored));
       }
+      const purgeMatch = path.match(/^\/api\/people\/([^/]+)\/purge$/);
+      if (purgeMatch && method === "DELETE") {
+        if (u.role !== "admin") return fail("เฉพาะผู้ดูแลระบบเท่านั้น", 403);
+        const body = await readJsonObject(request);
+        if (!Number.isInteger(body.version))
+          return fail("กรุณาระบุเวอร์ชันข้อมูล");
+        const result = await db.batch([
+          db
+            .prepare(
+              "DELETE FROM people WHERE id=? AND deleted_at IS NOT NULL AND version=?",
+            )
+            .bind(purgeMatch[1], body.version),
+          audit(db, u, "purge-person", purgeMatch[1], true),
+        ]);
+        if (!result[0].meta.changes)
+          return fail(
+            "ข้อมูลเปลี่ยนแปลงหรือไม่อยู่ในถังขยะ กรุณาโหลดใหม่",
+            409,
+          );
+        return json({ ok: true });
+      }
       const match = path.match(/^\/api\/people\/([^/]+)(\/restore)?$/);
       if (match) {
         const id = match[1],
@@ -312,15 +333,20 @@ export default {
             .first();
         if (!stored) return fail("ไม่พบข้อมูล", 404);
         const old = JSON.parse(stored.data);
-        if (method === "POST" && match[2] && u.role === "admin") {
-          await db.batch([
+        if (match[2]) {
+          if (method !== "POST") return fail("ไม่พบเส้นทาง", 404);
+          if (u.role !== "admin") return fail("ไม่มีสิทธิ์", 403);
+          if (!stored.deleted_at) return fail("ข้อมูลไม่อยู่ในถังขยะ", 409);
+          const result = await db.batch([
             db
               .prepare(
-                "UPDATE people SET deleted_at=NULL,deleted_by=NULL,delete_reason=NULL,version=version+1 WHERE id=?",
+                "UPDATE people SET deleted_at=NULL,deleted_by=NULL,delete_reason=NULL,version=version+1 WHERE id=? AND version=? AND deleted_at IS NOT NULL",
               )
-              .bind(id),
-            audit(db, u, "restore", id),
+              .bind(id, stored.version),
+            audit(db, u, "restore", id, true),
           ]);
+          if (!result[0].meta.changes)
+            return fail("ข้อมูลเปลี่ยนแปลง กรุณาโหลดใหม่", 409);
           return json({ ok: true });
         }
         if (stored.deleted_at) return fail("ข้อมูลอยู่ในถังขยะ", 404);
@@ -349,7 +375,7 @@ export default {
           const result = await db.batch([
             db
               .prepare(
-                "UPDATE people SET national_id=?,village=?,data=?,version=version+1 WHERE id=? AND version=?",
+                "UPDATE people SET national_id=?,village=?,data=?,version=version+1 WHERE id=? AND version=? AND deleted_at IS NULL",
               )
               .bind(
                 p.nationalId || null,
@@ -379,14 +405,22 @@ export default {
           const b = await readJsonObject(request);
           if (typeof b.reason !== "string" || !b.reason.trim())
             return fail("กรุณาระบุเหตุผล");
-          await db.batch([
+          const result = await db.batch([
             db
               .prepare(
-                "UPDATE people SET deleted_at=?,deleted_by=?,delete_reason=?,version=version+1 WHERE id=?",
+                "UPDATE people SET deleted_at=?,deleted_by=?,delete_reason=?,version=version+1 WHERE id=? AND version=? AND deleted_at IS NULL",
               )
-              .bind(new Date().toISOString(), u.username, b.reason, id),
-            audit(db, u, "delete-person", id),
+              .bind(
+                new Date().toISOString(),
+                u.username,
+                b.reason,
+                id,
+                stored.version,
+              ),
+            audit(db, u, "delete-person", id, true),
           ]);
+          if (!result[0].meta.changes)
+            return fail("ข้อมูลเปลี่ยนแปลง กรุณาโหลดใหม่", 409);
           return json({ ok: true });
         }
       }

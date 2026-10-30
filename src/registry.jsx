@@ -81,6 +81,8 @@ export function Registry({ user, config, refresh }) {
     [editor, setEditor] = useState(null),
     [readonly, setReadonly] = useState(false),
     [deleting, setDeleting] = useState(null),
+    [purging, setPurging] = useState(null),
+    [purgeError, setPurgeError] = useState(""),
     [busy, setBusy] = useState(false);
   const requestVersion = useRef(0);
   const params = new URLSearchParams({
@@ -422,25 +424,40 @@ export function Registry({ user, config, refresh }) {
                     <td>
                       <div className="actions">
                         {trash ? (
-                          <button
-                            title="กู้คืน"
-                            onClick={async () => {
-                              try {
-                                await api(
-                                  `/people/${p.id}/restore`,
-                                  "POST",
-                                  {},
-                                );
-                                load();
-                                refresh();
-                              } catch (e) {
-                                setError(e.message);
-                              }
-                            }}
-                          >
-                            <RotateCcw size={17} />
-                            กู้คืน
-                          </button>
+                          <>
+                            <button
+                              title="กู้คืน"
+                              onClick={async () => {
+                                try {
+                                  await api(
+                                    `/people/${p.id}/restore`,
+                                    "POST",
+                                    {},
+                                  );
+                                  load();
+                                  refresh();
+                                } catch (e) {
+                                  setError(e.message);
+                                }
+                              }}
+                            >
+                              <RotateCcw size={17} />
+                              กู้คืน
+                            </button>
+                            {user.role === "admin" && (
+                              <button
+                                className="danger-button"
+                                aria-label={`ลบถาวร ${p.first} ${p.last}`}
+                                onClick={() => {
+                                  setPurgeError("");
+                                  setPurging(p);
+                                }}
+                              >
+                                <Trash2 size={17} />
+                                ลบถาวร
+                              </button>
+                            )}
+                          </>
                         ) : (
                           <>
                             <button
@@ -561,6 +578,53 @@ export function Registry({ user, config, refresh }) {
             refresh();
           }}
         />
+      )}
+      {purging && (
+        <Modal
+          title="ลบข้อมูลถาวร"
+          onClose={() => {
+            if (!busy) setPurging(null);
+          }}
+        >
+          <p>
+            ลบข้อมูลของ {purging.first} {purging.last}{" "}
+            พร้อมคำขอและประวัติการช่วยเหลือทั้งหมดอย่างถาวร
+            การดำเนินการนี้ไม่สามารถกู้คืนผ่านระบบได้
+          </p>
+          <ErrorBox error={purgeError} />
+          <div className="modal-actions">
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => setPurging(null)}
+            >
+              ยกเลิก
+            </button>
+            <button
+              type="button"
+              className="danger-button"
+              disabled={busy}
+              onClick={async () => {
+                setBusy(true);
+                setPurgeError("");
+                try {
+                  await api(`/people/${purging.id}/purge`, "DELETE", {
+                    version: purging.version,
+                  });
+                  setPurging(null);
+                  load();
+                  refresh();
+                } catch (e) {
+                  setPurgeError(e.message);
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            >
+              {busy ? "กำลังลบ…" : "ยืนยันลบถาวร"}
+            </button>
+          </div>
+        </Modal>
       )}
       {deleting && (
         <Modal title="ย้ายข้อมูลเข้าถังขยะ" onClose={() => setDeleting(null)}>

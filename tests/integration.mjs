@@ -981,6 +981,97 @@ try {
       (await call("/people/" + p.id + "/restore", "POST", {})).status,
       200,
     );
+    const beforeInvalidRestore = (
+      await call(`/audit?action=restore&target=${p.id}`)
+    ).data.total;
+    const versionBeforeInvalidRestore = (await call(`/people?q=${p.id}`)).data
+      .items[0].version;
+    assert.equal(
+      (await call(`/people/${p.id}/restore`, "POST", {})).status,
+      409,
+    );
+    assert.equal(
+      (await call(`/audit?action=restore&target=${p.id}`)).data.total,
+      beforeInvalidRestore,
+    );
+    assert.equal(
+      (await call(`/people?q=${p.id}`)).data.items[0].version,
+      versionBeforeInvalidRestore,
+    );
+
+    assert.equal(
+      (
+        await call(`/people/${p.id}/restore`, "DELETE", {
+          reason: "เส้นทางผิด",
+        })
+      ).status,
+      404,
+    );
+    assert.equal((await call(`/people/${p.id}/restore`, "PUT", p)).status, 404);
+    const purgeFixture = (
+      await call("/people", "POST", {
+        ...p,
+        first: "ทดสอบลบถาวร",
+        nationalId: "",
+        requests: [],
+      })
+    ).data;
+    assert.equal(
+      (await call(`/people/${purgeFixture.id}/purge`, "DELETE", { version: 1 }))
+        .status,
+      409,
+    );
+    await call(`/people/${purgeFixture.id}`, "DELETE", {
+      reason: "ทดสอบลบถาวร",
+    });
+    assert.equal(
+      (await call(`/people/${purgeFixture.id}/purge`, "DELETE", { version: 1 }))
+        .status,
+      409,
+    );
+    await page
+      .getByRole("navigation")
+      .getByRole("button", { name: "ทะเบียนผู้ประสบปัญหา" })
+      .click();
+    await page.getByRole("button", { name: "ถังขยะ", exact: true }).click();
+    await page
+      .getByRole("button", { name: "ลบถาวร ทดสอบลบถาวร ระบบ", exact: true })
+      .click();
+    await page
+      .getByRole("dialog", { name: "ลบข้อมูลถาวร", exact: true })
+      .getByRole("button", { name: "ยกเลิก", exact: true })
+      .click();
+    assert.ok(
+      (await call("/people?trash=1")).data.items.some(
+        (x) => x.id === purgeFixture.id,
+      ),
+    );
+    await page
+      .getByRole("button", { name: "ลบถาวร ทดสอบลบถาวร ระบบ", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "ยืนยันลบถาวร", exact: true })
+      .click();
+    await page.getByRole("dialog").waitFor({ state: "hidden" });
+    await page
+      .getByRole("button", { name: "ทะเบียนผู้ประสบปัญหา", exact: true })
+      .last()
+      .click();
+    assert.equal(
+      (await call("/people?trash=1")).data.items.some(
+        (x) => x.id === purgeFixture.id,
+      ),
+      false,
+    );
+    assert.equal(
+      (await call(`/people/${purgeFixture.id}/restore`, "POST", {})).status,
+      404,
+    );
+    assert.equal(
+      (await call(`/audit?action=purge-person&target=${purgeFixture.id}`)).data
+        .total,
+      1,
+    );
     await call("/users", "POST", {
       username: "qa-staff",
       active: true,
@@ -1026,6 +1117,27 @@ try {
       false,
     );
     assert.equal((await staffCall("/people/" + p.id, "PUT", p)).status, 403);
+    await call(`/people/${p.id}`, "DELETE", { reason: "ทดสอบสิทธิ์ลบถาวร" });
+    assert.equal(
+      (await staffCall(`/people/${p.id}/restore`, "POST", {})).status,
+      403,
+    );
+    const trashedPerson = (await call("/people?trash=1")).data.items.find(
+      (x) => x.id === p.id,
+    );
+    assert.equal(
+      (
+        await staffCall(`/people/${p.id}/purge`, "DELETE", {
+          version: trashedPerson.version,
+        })
+      ).status,
+      403,
+    );
+    assert.ok(
+      (await call("/people?trash=1")).data.items.some((x) => x.id === p.id),
+    );
+    await call(`/people/${p.id}/restore`, "POST", {});
+
     assert.equal(
       (await staffCall("/people/" + p.id + "/export", "POST", {})).status,
       403,
@@ -1211,8 +1323,8 @@ try {
     // Administrator audit queries use the same applied filters on every page.
     const auditPage = await call("/audit?action=create-person&size=10&page=2");
     assert.equal(auditPage.status, 200);
-    assert.equal(auditPage.data.total, 15);
-    assert.equal(auditPage.data.items.length, 5);
+    assert.equal(auditPage.data.total, 16);
+    assert.equal(auditPage.data.items.length, 6);
     assert.ok(
       auditPage.data.items.every((a) => a.actor_username === "qa-admin"),
     );
@@ -1234,7 +1346,7 @@ try {
     await page
       .getByRole("button", { name: "ค้นหาประวัติ", exact: true })
       .click();
-    await page.getByText("ทั้งหมด 15 รายการ", { exact: true }).waitFor();
+    await page.getByText("ทั้งหมด 16 รายการ", { exact: true }).waitFor();
     await page.getByLabel("แสดง", { exact: false }).selectOption("10");
     await page
       .getByRole("button", { name: "ประวัติหน้าถัดไป", exact: true })
