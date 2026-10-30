@@ -1672,3 +1672,26 @@ footer,
     padding: 12px;
   }
 }
+.request-date {
+  font-weight: 600;
+  color: var(--navy);
+}
+.request-occurrence {
+  font-size: 12px;
+  color: #526174;
+}
+.request-heading-date {
+  display: block;
+  margin-top: 6px;
+  font-size: 13px;
+  font-weight: 400;
+  color: #526174;
+}
+.request-repeat {
+  margin: 0 0 16px 8px;
+}
+@media (max-width: 600px) {
+  .request-repeat {
+    margin-left: 0;
+  }
+}

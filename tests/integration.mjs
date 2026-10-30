@@ -336,6 +336,34 @@ try {
       .getByRole("button", { name: "ไปที่คำขอที่ 1", exact: true })
       .click();
     await page.getByRole("heading", { name: /คำขอที่ 1/ }).waitFor();
+    await page
+      .getByRole("button", { name: "ยื่นคำขอประเภทนี้อีกครั้ง", exact: true })
+      .click();
+    assert.equal(
+      await page
+        .getByLabel("ประเภทความช่วยเหลือ *", { exact: true })
+        .inputValue(),
+      p.requests[0].type,
+    );
+    assert.equal(
+      await page.getByLabel("หมวดหมู่", { exact: true }).inputValue(),
+      p.requests[0].category,
+    );
+    assert.equal(await page.locator(".request-card .payment").count(), 0);
+    assert.equal(
+      await page.getByLabel("สถานะ", { exact: true }).inputValue(),
+      "pending",
+    );
+    assert.equal(await page.locator(".request-tile").count(), 2);
+    await page
+      .getByRole("button", { name: "ลบคำขอที่ 2 ที่ยังไม่บันทึก", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "ลบรายการใหม่", exact: true })
+      .click();
+    assert.equal(await page.locator(".request-tile").count(), 1);
+    assert.equal(await page.locator(".request-card .payment").count(), 3);
+
     assert.equal(await page.locator(".request-card").count(), 1);
     await page.screenshot({
       path: "/tmp/bs-sams-request-editor-desktop.png",

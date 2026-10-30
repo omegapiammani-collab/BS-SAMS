@@ -1,3 +1,4 @@
+import { formatThaiDate } from "./thai-date.js";
 import React, { useEffect, useState, useRef } from "react";
 import {
   Plus,
@@ -621,14 +622,14 @@ function PersonEditor({ person, readonly, config, user, onClose, onSaved }) {
     heading?.focus();
     heading?.scrollIntoView({ block: "start", behavior: "smooth" });
   }, [activeRequest]);
-  function addRequest() {
+  function addRequest(previous) {
     const id = crypto.randomUUID();
     update("requests", [
       ...p.requests,
       {
         id,
-        category: "0",
-        type: "",
+        category: previous?.category ?? "0",
+        type: previous?.type ?? "",
         note: "",
         date: today(),
         status: "pending",
@@ -839,7 +840,7 @@ function PersonEditor({ person, readonly, config, user, onClose, onSaved }) {
             <div className="panel-title section-title">
               <h3>สรุปสภาพปัญหาและคำขอรับความช่วยเหลือ</h3>
               {!readonly && (
-                <button type="button" onClick={addRequest}>
+                <button type="button" onClick={() => addRequest()}>
                   <Plus size={16} />
                   เพิ่มคำขอ
                 </button>
@@ -870,6 +871,12 @@ function PersonEditor({ person, readonly, config, user, onClose, onSaved }) {
                             (x) => x.id === r.id,
                           );
                           const total = sumMoney(r.payments);
+                          const occurrence = p.requests
+                            .slice(0, index + 1)
+                            .filter(
+                              (x) =>
+                                x.category === r.category && x.type === r.type,
+                            ).length;
                           return (
                             <button
                               type="button"
@@ -897,6 +904,12 @@ function PersonEditor({ person, readonly, config, user, onClose, onSaved }) {
                                 {r.type || "คำขอใหม่ · ยังไม่ระบุประเภท"}
                               </span>
                               <span className="request-tile-body">
+                                <span className="request-date">
+                                  ยื่นคำขอ {formatThaiDate(r.date)}
+                                </span>
+                                <span className="request-occurrence">
+                                  ครั้งที่ {occurrence} ของประเภทนี้
+                                </span>
                                 <span className={"badge " + r.status}>
                                   {statuses[r.status]}
                                 </span>
@@ -938,6 +951,9 @@ function PersonEditor({ person, readonly, config, user, onClose, onSaved }) {
                   <div className="panel-title">
                     <h3 id={"request-" + r.id} tabIndex={-1}>
                       คำขอที่ {index + 1} · {categories[Number(r.category)]}
+                      <small className="request-heading-date">
+                        ยื่นคำขอ {formatThaiDate(r.date)}
+                      </small>
                     </h3>
                     <div className="actions">
                       <span className={"badge " + r.status}>
@@ -971,6 +987,20 @@ function PersonEditor({ person, readonly, config, user, onClose, onSaved }) {
                     <ChevronLeft size={16} />
                     กลับไปสรุปคำขอ
                   </button>
+                  {!readonly && r.type.trim() && (
+                    <button
+                      type="button"
+                      className="request-repeat"
+                      onClick={() => addRequest(r)}
+                    >
+                      <Plus size={16} />
+                      ยื่นคำขอประเภทนี้อีกครั้ง
+                    </button>
+                  )}
+                  <p className="muted">
+                    แต่ละวันที่ยื่นให้สร้างคำขอใหม่
+                    ประวัติการช่วยเหลือด้านล่างเป็นของคำขอครั้งนี้เท่านั้น
+                  </p>
                   <fieldset disabled={readonly}>
                     <div className="form-grid">
                       <Select
