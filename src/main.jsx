@@ -8,6 +8,8 @@ import {
   Shield,
   LogOut,
   KeyRound,
+  Eye,
+  EyeOff,
   Menu,
   HeartHandshake,
   Plus,
@@ -52,8 +54,10 @@ const nav = [
 ];
 function Login({ onLogin, change = false, notice = "", username = "" }) {
   const [loginPassword, setLoginPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   useEffect(() => {
     if (!change) setLoginPassword("");
+    setShowPassword(false);
   }, [change]);
   const [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
@@ -69,7 +73,10 @@ function Login({ onLogin, change = false, notice = "", username = "" }) {
         setLoginPassword("");
         onLogin(null);
       } else {
-        const user = await api("/login", "POST", b);
+        const user = await api("/login", "POST", {
+          ...b,
+          remember: b.remember === "on",
+        });
         setLoginPassword(user.mustChange ? b.password : "");
         onLogin(user);
       }
@@ -81,105 +88,127 @@ function Login({ onLogin, change = false, notice = "", username = "" }) {
   }
   return (
     <main className="login">
-      <section className="login-brand">
-        <HeartHandshake size={62} />
-        <h1>
-          ดูแลทุกความเดือดร้อน
-          <br />
-          ให้เข้าถึงความช่วยเหลือ
-        </h1>
-        <p>
+      <section className="login-brand" aria-label="ข้อมูลระบบ">
+        <div className="login-system-name">
+          <HeartHandshake size={40} aria-hidden="true" />
+          <span lang="en">Ban Sadet Social Assistance Monitoring System</span>
+        </div>
+        <h1>ระบบติดตามการช่วยเหลือผู้ประสบปัญหาทางสังคม</h1>
+        <p className="login-organization">
           กองสวัสดิการสังคม
           <br />
           องค์การบริหารส่วนตำบลบ้านเสด็จ
         </p>
-        <div className="brand-line" />
       </section>
-      <section className="login-form">
-        <div className="brand">
-          <HeartHandshake />
-          <div>
-            บ้านเสด็จ<span>ระบบสวัสดิการสังคม</span>
-          </div>
-        </div>
-        <h2>{change ? "ตั้งรหัสผ่านใหม่" : "เข้าสู่ระบบ"}</h2>
-        <p>
-          {change
-            ? "เปลี่ยนรหัสผ่านชั่วคราวก่อนเริ่มใช้งาน"
-            : "สำหรับผู้ดูแลระบบและเจ้าหน้าที่"}
-        </p>
-        {notice && (
-          <p className="success" role="status">
-            {notice}
+      <section
+        className="login-form"
+        aria-label={change ? "ตั้งรหัสผ่านใหม่" : "เข้าสู่ระบบ"}
+      >
+        <div className="login-form-content">
+          <h2>{change ? "ตั้งรหัสผ่านใหม่" : "เข้าสู่ระบบ"}</h2>
+          <p>
+            {change
+              ? "เปลี่ยนรหัสผ่านชั่วคราวก่อนเริ่มใช้งาน"
+              : "กรอกชื่อผู้ใช้และรหัสผ่านของท่าน"}
           </p>
-        )}
-        <form key={change ? "change-password" : "login"} onSubmit={submit}>
-          <ErrorBox error={error} />
-          {change ? (
-            <>
-              <input
-                type="hidden"
-                name="username"
-                autoComplete="username"
-                value={username}
-                readOnly
-              />
-              <Field
-                label="รหัสผ่านปัจจุบัน"
-                name="current"
-                type="password"
-                defaultValue={loginPassword}
-                readOnly={!!loginPassword}
-                required
-                autoComplete="current-password"
-              />
-              <Field
-                label="รหัสผ่านใหม่ อย่างน้อย 8 ตัวอักษร · A–Z, a–z, 0–9 และอักขระพิเศษ"
-                name="password"
-                type="password"
-                minLength={8}
-                maxLength={128}
-                required
-                autoComplete="new-password"
-              />
-              <Field
-                label="ยืนยันรหัสผ่านใหม่"
-                name="confirm"
-                type="password"
-                required
-                autoComplete="new-password"
-              />
-            </>
-          ) : (
-            <>
-              <Field
-                label="ชื่อผู้ใช้"
-                name="username"
-                defaultValue={username}
-                required
-                autoComplete="username"
-              />
-              <Field
-                label="รหัสผ่าน"
-                name="password"
-                type="password"
-                required
-                autoComplete="current-password"
-              />
-            </>
+          {notice && (
+            <p className="success" role="status">
+              {notice}
+            </p>
           )}
-          <button className="primary full" disabled={busy}>
-            {busy
-              ? "กำลังดำเนินการ…"
-              : change
-                ? "บันทึกรหัสผ่านใหม่"
-                : "เข้าสู่ระบบ"}
-            <ArrowRight size={18} />
-          </button>
-        </form>
-        <p className="muted small">
-          ลืมรหัสผ่าน? ติดต่อผู้ดูแลระบบเพื่อขอรหัสผ่านชั่วคราว
-        </p>
+          <form key={change ? "change-password" : "login"} onSubmit={submit}>
+            <ErrorBox error={error} />
+            {change ? (
+              <>
+                <input
+                  type="hidden"
+                  name="username"
+                  autoComplete="username"
+                  value={username}
+                  readOnly
+                />
+                <Field
+                  label="รหัสผ่านปัจจุบัน"
+                  name="current"
+                  type="password"
+                  defaultValue={loginPassword}
+                  readOnly={!!loginPassword}
+                  required
+                  autoComplete="current-password"
+                />
+                <Field
+                  label="รหัสผ่านใหม่ อย่างน้อย 8 ตัวอักษร · A–Z, a–z, 0–9 และอักขระพิเศษ"
+                  name="password"
+                  type="password"
+                  minLength={8}
+                  maxLength={128}
+                  required
+                  autoComplete="new-password"
+                />
+                <Field
+                  label="ยืนยันรหัสผ่านใหม่"
+                  name="confirm"
+                  type="password"
+                  required
+                  autoComplete="new-password"
+                />
+              </>
+            ) : (
+              <>
+                <Field
+                  label="ชื่อผู้ใช้"
+                  name="username"
+                  defaultValue={username}
+                  required
+                  autoComplete="username"
+                />
+                <div className="login-password">
+                  <Field label="รหัสผ่าน">
+                    <input
+                      name="password"
+                      type={showPassword ? "text" : "password"}
+                      required
+                      autoComplete="current-password"
+                    />
+                    <button
+                      type="button"
+                      className="password-visibility"
+                      aria-label={
+                        showPassword ? "ซ่อนรหัสผ่าน" : "แสดงรหัสผ่าน"
+                      }
+                      aria-pressed={showPassword}
+                      onClick={() => setShowPassword(!showPassword)}
+                    >
+                      {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                    </button>
+                  </Field>
+                </div>
+                <label className="remember-login">
+                  <input
+                    type="checkbox"
+                    name="remember"
+                    aria-describedby="remember-login-help"
+                  />
+                  <span>จดจำการเข้าสู่ระบบ</span>
+                </label>
+                <p id="remember-login-help" className="remember-login-help">
+                  คงการเข้าสู่ระบบไว้ 30 วัน
+                </p>
+              </>
+            )}
+            <button className="primary full" disabled={busy}>
+              {busy
+                ? "กำลังดำเนินการ…"
+                : change
+                  ? "บันทึกรหัสผ่านใหม่"
+                  : "เข้าสู่ระบบ"}
+              <ArrowRight size={18} />
+            </button>
+          </form>
+          <p className="muted small">
+            ลืมรหัสผ่าน? ติดต่อผู้ดูแลระบบเพื่อขอรหัสผ่านชั่วคราว
+          </p>
+        </div>
       </section>
     </main>
   );

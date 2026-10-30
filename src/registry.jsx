@@ -220,7 +220,7 @@ export function Registry({ user, config, refresh }) {
                   onClick={() => exportData(format)}
                 >
                   <Download size={16} />
-                  {format === "xlsx" ? "Excel" : format.toUpperCase()}
+                  {format === "xlsx" ? "EXCEL" : format.toUpperCase()}
                 </button>
               ))}
               {(user.role === "admin" ||

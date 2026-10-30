@@ -67,7 +67,8 @@ export default {
         if (
           typeof b.username !== "string" ||
           typeof b.password !== "string" ||
-          b.password.length > 256
+          b.password.length > 256 ||
+          (b.remember !== undefined && typeof b.remember !== "boolean")
         )
           return fail("ข้อมูลเข้าสู่ระบบไม่ถูกต้อง");
         const key = request.headers.get("CF-Connecting-IP") || "local",
@@ -94,12 +95,14 @@ export default {
         if (!row || !valid)
           return fail("ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง", 401);
         const token = crypto.randomUUID() + crypto.randomUUID();
+        const remember = b.remember === true && !row.must_change;
+        const lifetime = remember ? 30 * 24 * 3600 : 8 * 3600;
         await db
           .prepare("INSERT INTO sessions VALUES(?,?,?)")
-          .bind(token, row.id, now + 8 * 3600000)
+          .bind(token, row.id, now + lifetime * 1000)
           .run();
         return json(safeUser(row), 200, {
-          "Set-Cookie": `session=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=28800${url.protocol === "https:" ? "; Secure" : ""}`,
+          "Set-Cookie": `session=${token}; HttpOnly; SameSite=Strict; Path=/${remember ? `; Max-Age=${lifetime}` : ""}${url.protocol === "https:" ? "; Secure" : ""}`,
         });
       }
       const row = await db

@@ -120,6 +120,43 @@ try {
   }
   try {
     await page.goto(origin);
+    for (const copy of [
+      "Ban Sadet Social Assistance Monitoring System",
+      "ระบบติดตามการช่วยเหลือผู้ประสบปัญหาทางสังคม",
+      "กรอกชื่อผู้ใช้และรหัสผ่านของท่าน",
+    ])
+      await page.getByText(copy, { exact: true }).waitFor();
+    await page.setViewportSize({ width: 1919, height: 952 });
+    await page.screenshot({
+      path: "/tmp/bs-sams-login-desktop.png",
+      fullPage: true,
+    });
+    await page.setViewportSize({ width: 390, height: 844 });
+    assert.equal(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth > innerWidth,
+      ),
+      false,
+    );
+    await page.screenshot({
+      path: "/tmp/bs-sams-login-mobile.png",
+      fullPage: true,
+    });
+    await page
+      .getByRole("button", { name: "แสดงรหัสผ่าน", exact: true })
+      .click();
+    assert.equal(
+      await page.getByLabel("รหัสผ่าน", { exact: true }).getAttribute("type"),
+      "text",
+    );
+    await page
+      .getByRole("button", { name: "ซ่อนรหัสผ่าน", exact: true })
+      .click();
+    assert.equal(
+      await page.getByLabel("รหัสผ่าน", { exact: true }).getAttribute("type"),
+      "password",
+    );
+    await page.setViewportSize({ width: 1536, height: 1024 });
     await page.getByLabel("ชื่อผู้ใช้", { exact: true }).fill("qa-admin");
     await page.getByLabel("รหัสผ่าน", { exact: true }).fill(pass);
     await page
@@ -139,6 +176,11 @@ try {
         400,
       );
     }
+    assert.equal(
+      (await context.cookies()).find((cookie) => cookie.name === "session")
+        .expires,
+      -1,
+    );
     assert.equal(await page.getByLabel("รหัสผ่านปัจจุบัน").inputValue(), pass);
     assert.equal(
       await page.getByLabel("รหัสผ่านปัจจุบัน").evaluate((el) => el.readOnly),
@@ -165,10 +207,28 @@ try {
       nextPass,
     );
     await page.getByLabel("รหัสผ่าน", { exact: true }).fill(nextPass);
+    await page.getByLabel("จดจำการเข้าสู่ระบบ", { exact: true }).check();
     await page
       .getByRole("button", { name: "เข้าสู่ระบบ", exact: true })
       .click();
     await page.getByRole("heading", { name: "ภาพรวมการช่วยเหลือ" }).waitFor();
+    const rememberedCookie = (await context.cookies()).find(
+      (cookie) => cookie.name === "session",
+    );
+    const rememberedSeconds = rememberedCookie.expires - Date.now() / 1000;
+    assert.ok(
+      rememberedSeconds > 30 * 86400 - 60 && rememberedSeconds <= 30 * 86400,
+    );
+    assert.equal(rememberedCookie.httpOnly, true);
+    assert.equal(rememberedCookie.sameSite, "Strict");
+    const reopened = await browser.newContext({
+      storageState: await context.storageState(),
+    });
+    assert.equal(
+      (await reopened.request.get(origin + "/api/me")).status(),
+      200,
+    );
+    await reopened.close();
     assert.equal((await call("/people")).status, 200);
     await page
       .getByRole("navigation")
@@ -568,7 +628,7 @@ try {
     });
     assert.equal(exportResponse.data.length, 1);
     const download = page.waitForEvent("download");
-    await page.getByRole("button", { name: "Excel", exact: true }).click();
+    await page.getByRole("button", { name: "EXCEL", exact: true }).click();
     const dl = await download;
     assert.ok(dl.suggestedFilename().endsWith(".xlsx"));
     await dl.saveAs("/tmp/bs-sams-qa.xlsx");
@@ -678,7 +738,9 @@ try {
     };
     page.on("request", watchRequest);
     const reportDownload = page.waitForEvent("download");
-    await page.getByRole("button", { name: "XLSX", exact: true }).click();
+    await monthPanel
+      .getByRole("button", { name: "EXCEL", exact: true })
+      .click();
     await (await reportDownload).saveAs("/tmp/bs-sams-summary.xlsx");
     page.off("request", watchRequest);
     assert.deepEqual(rawExports, []);
@@ -697,7 +759,7 @@ try {
     assert.equal(moneyRow.getCell(6).value, 3000.3);
     assert.equal(moneyRow.getCell(6).type, ExcelJS.ValueType.Number);
     const summaryPdfDownload = page.waitForEvent("download");
-    await page.getByRole("button", { name: "PDF", exact: true }).click();
+    await monthPanel.getByRole("button", { name: "PDF", exact: true }).click();
     await (await summaryPdfDownload).saveAs("/tmp/bs-sams-summary.pdf");
     const summaryPdfText = execFileSync(
       "pdftotext",
@@ -707,11 +769,51 @@ try {
     assert.ok(
       execFileSync("pdfinfo", ["/tmp/bs-sams-summary.pdf"], {
         encoding: "utf8",
-      }).includes("รายงานผู้ประสบปัญหา"),
+      }).includes("รายละเอียดรายเดือน"),
     );
-    assert.ok(summaryPdfText.includes("เงินสงเคราะห์"));
+    assert.equal(summaryPdfText.includes("เงินสงเคราะห์"), false);
     assert.ok(summaryPdfText.includes("3000.3"));
     assert.equal(summaryPdfText.includes("บุคคลทดสอบ"), false);
+    const monthlyCsvDownload = page.waitForEvent("download");
+    await monthPanel.getByRole("button", { name: "CSV", exact: true }).click();
+    await (await monthlyCsvDownload).saveAs("/tmp/bs-sams-monthly.csv");
+    const monthlyCsv = readFileSync("/tmp/bs-sams-monthly.csv", "utf8");
+    assert.ok(monthlyCsv.includes("3000.3"));
+    assert.equal(monthlyCsv.includes("เงินสงเคราะห์"), false);
+    await page
+      .getByLabel("รูปแบบรายงาน", { exact: true })
+      .selectOption("village");
+    const villagePanel = page
+      .locator("section.panel")
+      .filter({
+        has: page.getByRole("heading", {
+          name: "จำนวนผู้ประสบปัญหารายหมู่บ้าน",
+          exact: true,
+        }),
+      });
+    const villageDownload = page.waitForEvent("download");
+    await villagePanel
+      .getByRole("button", { name: "EXCEL", exact: true })
+      .click();
+    await (await villageDownload).saveAs("/tmp/bs-sams-villages.xlsx");
+    const villageBook = new ExcelJS.Workbook();
+    await villageBook.xlsx.readFile("/tmp/bs-sams-villages.xlsx");
+    const villageValues = [];
+    villageBook.worksheets[0].eachRow((row) =>
+      villageValues.push(row.getCell(1).value),
+    );
+    assert.ok(villageValues.includes("หมู่บ้าน"));
+    assert.equal(villageValues.includes("เดือน"), false);
+    const villagePdfDownload = page.waitForEvent("download");
+    await villagePanel
+      .getByRole("button", { name: "PDF", exact: true })
+      .click();
+    await (await villagePdfDownload).saveAs("/tmp/bs-sams-villages.pdf");
+    assert.ok(
+      execFileSync("pdfinfo", ["/tmp/bs-sams-villages.pdf"], {
+        encoding: "utf8",
+      }).includes("จำนวนผู้ประสบปัญหารายหมู่บ้าน"),
+    );
 
     assert.equal(
       (await call("/summary?from=2026-02-30&to=2026-03-01")).status,
@@ -881,7 +983,7 @@ try {
       .getByRole("button", { name: "ดู ทดสอบแบ่งหน้า10", exact: true })
       .waitFor();
     const filteredDownload = page.waitForEvent("download");
-    await page.getByRole("button", { name: "Excel", exact: true }).click();
+    await page.getByRole("button", { name: "EXCEL", exact: true }).click();
     await (await filteredDownload).saveAs("/tmp/bs-sams-filtered.xlsx");
     const filteredBook = new ExcelJS.Workbook();
     await filteredBook.xlsx.readFile("/tmp/bs-sams-filtered.xlsx");

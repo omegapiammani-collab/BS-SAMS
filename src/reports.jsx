@@ -1,3 +1,4 @@
+import { reportExport } from "./report-export.js";
 import React, { useEffect, useState } from "react";
 import {
   Users,
@@ -334,7 +335,7 @@ export function Reports({ user, config, range, setRange }) {
           d.villages[v.id] || 0,
         ])
     : [];
-  async function exportData(format) {
+  async function exportData(format, section) {
     setBusy(true);
     setError("");
     try {
@@ -342,50 +343,41 @@ export function Reports({ user, config, range, setRange }) {
         from: range[0],
         to: range[1],
       });
-      const rows =
-        type === "category"
-          ? categories.map((c, i) => [c, sum.category[i]])
-          : config.villages.map((v) => [
-              `หมู่ ${v.id} บ้าน${v.name}`,
-              sum.villages[v.id] || 0,
-            ]);
-      await downloadRows(
-        [
-          ["ช่วงวันที่", ...range],
-          ["ขอบเขตข้อมูล", "เฉพาะหมู่บ้านที่มีสิทธิ์ดูและส่งออก"],
-          ["หมวดหมู่", "จำนวนคน"],
-          ...rows,
-          [],
-          ["ยอดรวมผู้ยื่นคำขอ", sum.people],
-          ["ผู้ได้รับความช่วยเหลือจริง", sum.helpedPeople],
-          ["จำนวนครั้งช่วยเหลือ", sum.helpedEvents],
-          [],
-          [
-            "เดือน",
-            "ผู้ยื่นคำขอ (คน)",
-            "คำขอ (รายการ)",
-            "ผู้ได้รับความช่วยเหลือ (คน)",
-            "ช่วยเหลือ (ครั้ง)",
-            "จำนวนเงิน (บาท)",
-          ],
-          ...sum.monthly.map((m) => [
-            monthLabel(m.month),
-            m.requestedPeople,
-            m.requested,
-            m.helpedPeople,
-            m.helped,
-            m.amount,
-          ]),
-        ],
-        format,
-        "รายงานผู้ประสบปัญหา",
-      );
+      const output = reportExport(sum, config, range, type, section);
+      await downloadRows(output.rows, format, output.name);
     } catch (e) {
       setError(e.message);
     } finally {
       setBusy(false);
     }
   }
+  const exportButtons = (section) => (
+    <div
+      className="actions"
+      role="group"
+      aria-label={
+        section === "monthly" ? "ส่งออกรายละเอียดรายเดือน" : "ส่งออกตารางสรุป"
+      }
+    >
+      {["csv", "xlsx", "pdf"].map((format) => (
+        <button
+          key={format}
+          disabled={
+            busy ||
+            !d ||
+            !!error ||
+            (user.role !== "admin" &&
+              (!user.permissions.includes("export") ||
+                !user.permissions.includes("view")))
+          }
+          onClick={() => exportData(format, section)}
+        >
+          <Download size={16} />
+          {format === "xlsx" ? "EXCEL" : format.toUpperCase()}
+        </button>
+      ))}
+    </div>
+  );
   return (
     <>
       <section className="panel">
@@ -455,31 +447,13 @@ export function Reports({ user, config, range, setRange }) {
             จำนวนผู้ประสบปัญหา
             {type === "category" ? "ตามประเภทความช่วยเหลือ" : "รายหมู่บ้าน"}
           </h2>
-          <div className="actions">
-            {["csv", "xlsx", "pdf"].map((f) => (
-              <button
-                key={f}
-                disabled={
-                  busy ||
-                  !d ||
-                  !!error ||
-                  (user.role !== "admin" &&
-                    (!user.permissions.includes("export") ||
-                      !user.permissions.includes("view")))
-                }
-                onClick={() => exportData(f)}
-              >
-                <Download size={16} />
-                {f.toUpperCase()}
-              </button>
-            ))}
-          </div>
+          {exportButtons("summary")}
         </div>
         <div className="table-scroll">
           <table>
             <thead>
               <tr>
-                <th>หมวดหมู่</th>
+                <th>{type === "village" ? "หมู่บ้าน" : "หมวดหมู่"}</th>
                 <th>จำนวนผู้ประสบปัญหา</th>
               </tr>
             </thead>
@@ -498,6 +472,7 @@ export function Reports({ user, config, range, setRange }) {
         <section className="panel">
           <div className="panel-title">
             <h2>รายละเอียดรายเดือน</h2>
+            {exportButtons("monthly")}
           </div>
           <p className="panel-note">
             จำนวนคนในแต่ละเดือนนับไม่ซ้ำภายในเดือน
