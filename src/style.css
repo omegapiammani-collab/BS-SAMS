@@ -174,15 +174,19 @@ small,
   color: var(--navy);
   font-size: 23px;
   font-weight: 600;
-  padding: 29px 25px;
+  padding: 29px 20px;
 }
 .brand svg {
   color: var(--blue);
+  width: 56px;
+  height: 56px;
+  flex-shrink: 0;
 }
 .brand img {
-  width: 40px;
-  height: 40px;
+  width: 56px;
+  height: 56px;
   object-fit: contain;
+  flex-shrink: 0;
 }
 .brand span {
   display: block;
