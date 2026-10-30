@@ -64,3 +64,16 @@ test("password resets are separate from account edits", () => {
   ])
     assert.equal(validPassword(p), false);
 });
+
+test("password symbols must be punctuation or symbols, not other alphabet letters", () => {
+  for (const value of ["Abcdefg1ก", "Abcdefg1é", "Abcdefg1中"])
+    assert.equal(validPassword(value), false);
+  for (const value of [
+    "Abcdefg1!",
+    "Abcdefg1@",
+    "Abcdefg1€",
+    "Abcdefg1_",
+    "Abcdefg1-",
+  ])
+    assert.equal(validPassword(value), true);
+});

@@ -1,5 +1,5 @@
 import { reportExport } from "./report-export.js";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Users,
   HeartHandshake,
@@ -323,6 +323,7 @@ export async function downloadRows(rows, format, name, pdfOptions) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 export function Reports({ user, config, range, setRange }) {
+  const controls = useRef(null);
   const [d, error] = useSummary(range),
     [type, setType] = useState("category"),
     [exportError, setError] = useState(""),
@@ -336,6 +337,10 @@ export function Reports({ user, config, range, setRange }) {
         ])
     : [];
   async function exportData(format, section) {
+    if (!controls.current.reportValidity()) {
+      setError("กรุณาตรวจสอบช่วงวันที่ก่อนส่งออกรายงาน");
+      return;
+    }
     setBusy(true);
     setError("");
     try {
@@ -381,11 +386,16 @@ export function Reports({ user, config, range, setRange }) {
   return (
     <>
       <section className="panel">
-        <div className="report-controls">
+        <form
+          ref={controls}
+          className="report-controls"
+          onSubmit={(event) => event.preventDefault()}
+        >
           <Field label="ตั้งแต่วันที่">
             <input
               type="date"
               value={range[0]}
+              required
               max={range[1]}
               onChange={(e) =>
                 e.target.value && setRange([e.target.value, range[1]])
@@ -396,6 +406,7 @@ export function Reports({ user, config, range, setRange }) {
             <input
               type="date"
               value={range[1]}
+              required
               min={range[0]}
               onChange={(e) =>
                 e.target.value && setRange([range[0], e.target.value])
@@ -408,7 +419,7 @@ export function Reports({ user, config, range, setRange }) {
               <option value="village">รายหมู่บ้าน</option>
             </select>
           </Field>
-        </div>
+        </form>
         <div className="notice">
           นับผู้ยื่นคำขอตามวันที่ยื่น
           และผู้ได้รับความช่วยเหลือตามวันที่ได้รับจริง

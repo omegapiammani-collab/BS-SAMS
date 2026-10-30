@@ -120,6 +120,13 @@ try {
     return { status: response.status(), data: await response.json() };
   }
   try {
+    for (const body of ["null", "{", "[]"]) {
+      const response = await context.request.post(origin + "/api/login", {
+        data: body,
+        headers: { "Content-Type": "application/json" },
+      });
+      assert.equal(response.status(), 400);
+    }
     await page.goto(origin);
     for (const copy of [
       "Ban Sadet Social Assistance Monitoring System",
@@ -624,6 +631,36 @@ try {
 
     assert.equal((await call("/people")).data.items[0].first, "บุคคลทดสอบ");
 
+    const invalidJson = await context.request.post(origin + "/api/people", {
+      data: "null",
+      headers: { "Content-Type": "application/json" },
+    });
+    assert.equal(invalidJson.status(), 400);
+    assert.equal((await call("/config", "PUT", { name: 7 })).status, 400);
+    const savedConfiguration = (await call("/config")).data;
+    assert.equal(
+      (
+        await call("/config", "PUT", {
+          ...savedConfiguration,
+          villages: [null],
+        })
+      ).status,
+      400,
+    );
+    assert.equal(
+      (
+        await call("/config", "PUT", {
+          ...savedConfiguration,
+          types: [null, ...savedConfiguration.types.slice(1)],
+        })
+      ).status,
+      400,
+    );
+
+    assert.equal(
+      (await call("/people/" + p.id, "DELETE", { reason: 7 })).status,
+      400,
+    );
     const auditBefore = (await call("/audit?size=100")).data.items.filter(
       (x) => x.action === "update-person" && x.target === p.id,
     ).length;
@@ -773,6 +810,22 @@ try {
       .getByText(monthLabel("2027-10"), { exact: true })
       .waitFor();
     assert.equal(await monthPanel.getByRole("row").count(), 14);
+    const invalidDateExports = [];
+    const captureExport = (request) => {
+      if (new URL(request.url()).pathname === "/api/report-export")
+        invalidDateExports.push(request.url());
+    };
+    page.on("request", captureExport);
+    await page.getByLabel("ตั้งแต่วันที่", { exact: true }).fill("31/02/2569");
+    await monthPanel.getByRole("button", { name: "CSV", exact: true }).click();
+    await page
+      .getByRole("alert")
+      .filter({ hasText: "กรุณาตรวจสอบช่วงวันที่ก่อนส่งออกรายงาน" })
+      .waitFor();
+    assert.deepEqual(invalidDateExports, []);
+    page.off("request", captureExport);
+    await page.getByLabel("ตั้งแต่วันที่", { exact: true }).fill("01/10/2569");
+
     await page.screenshot({
       path: "/tmp/bs-sams-report-mobile.png",
       fullPage: true,

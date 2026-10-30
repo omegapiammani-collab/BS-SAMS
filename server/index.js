@@ -1,3 +1,4 @@
+import { readJsonObject, RequestBodyError } from "./request-body.js";
 import { passwordHelp } from "../src/password-policy.js";
 import { validateAccount, validPassword } from "./accounts.js";
 import { listAudit } from "./audit.js";
@@ -64,7 +65,7 @@ export default {
           return fail("ข้อมูลมีขนาดใหญ่เกินไป", 413);
       }
       if (path === "/api/login" && method === "POST") {
-        const b = await request.json();
+        const b = await readJsonObject(request);
         if (
           typeof b.username !== "string" ||
           typeof b.password !== "string" ||
@@ -126,7 +127,7 @@ export default {
         });
       }
       if (path === "/api/password" && method === "POST") {
-        const b = await request.json();
+        const b = await readJsonObject(request);
         if (
           typeof b.current !== "string" ||
           b.current.length > 128 ||
@@ -151,9 +152,10 @@ export default {
       if (path === "/api/config") {
         if (method === "GET") return json(await config(db));
         if (method === "PUT" && u.role === "admin") {
-          const b = await request.json();
+          const b = await readJsonObject(request);
           if (
-            !b.name?.trim() ||
+            typeof b.name !== "string" ||
+            !b.name.trim() ||
             !Array.isArray(b.villages) ||
             !b.villages.length ||
             !Array.isArray(b.types) ||
@@ -161,14 +163,23 @@ export default {
           )
             return fail("การตั้งค่าไม่ถูกต้อง");
           if (
-            new Set(b.villages.map((v) => v.id)).size !== b.villages.length ||
-            b.villages.some((v) => !Number.isInteger(v.id) || !v.name?.trim())
+            b.villages.some(
+              (v) =>
+                !v ||
+                typeof v !== "object" ||
+                !Number.isInteger(v.id) ||
+                typeof v.name !== "string" ||
+                !v.name.trim(),
+            ) ||
+            new Set(b.villages.map((v) => v.id)).size !== b.villages.length
           )
             return fail("ข้อมูลหมู่บ้านไม่ถูกต้อง");
           if (
             b.name.length > 200 ||
             b.types.some(
               (t, i) =>
+                !t ||
+                typeof t !== "object" ||
                 t.id !== String(i) ||
                 !Array.isArray(t.items) ||
                 t.items.length > 100 ||
@@ -213,7 +224,7 @@ export default {
         return json(summarize(list, from, to));
       }
       if (path === "/api/report-export" && method === "POST") {
-        const { from, to } = await request.json();
+        const { from, to } = await readJsonObject(request);
         const error = validateReportRange(from, to);
         if (error) return fail(error);
         if (
@@ -237,7 +248,7 @@ export default {
         return json(await listPeople(db, u, query));
       }
       if (path === "/api/export" && method === "POST") {
-        const b = await request.json();
+        const b = await readJsonObject(request);
         const query = parsePeopleQuery(new URLSearchParams(b.filters || {}));
         query.trash = false;
         const selection = peopleSelection(u, query, true);
@@ -252,7 +263,7 @@ export default {
         return json(list);
       }
       if (path === "/api/people" && method === "POST") {
-        const p = await request.json(),
+        const p = await readJsonObject(request),
           cfg = await config(db);
         p.village = Number(p.village);
         const err = validatePerson(p, cfg);
@@ -314,7 +325,7 @@ export default {
         }
         if (stored.deleted_at) return fail("ข้อมูลอยู่ในถังขยะ", 404);
         if (method === "PUT") {
-          const p = await request.json();
+          const p = await readJsonObject(request);
           p.village = Number(p.village);
           if (
             !allowed(u, "view", stored.village) ||
@@ -365,8 +376,9 @@ export default {
             !allowed(u, "view", stored.village)
           )
             return fail("ไม่มีสิทธิ์", 403);
-          const b = await request.json();
-          if (!b.reason?.trim()) return fail("กรุณาระบุเหตุผล");
+          const b = await readJsonObject(request);
+          if (typeof b.reason !== "string" || !b.reason.trim())
+            return fail("กรุณาระบุเหตุผล");
           await db.batch([
             db
               .prepare(
@@ -383,7 +395,7 @@ export default {
         const id = resetMatch[1];
         if (id === u.id)
           return fail("กรุณาใช้เมนูเปลี่ยนรหัสผ่านสำหรับบัญชีของคุณ");
-        const body = await request.json();
+        const body = await readJsonObject(request);
         if (!validPassword(body?.password)) return fail(passwordHelp);
         const target = await db
           .prepare("SELECT id,active FROM users WHERE id=?")
@@ -410,7 +422,7 @@ export default {
           return json(users.results.map(safeUser));
         }
         if (method === "POST" || method === "PUT") {
-          const b = await request.json();
+          const b = await readJsonObject(request);
           const invalid = validateAccount(
             b,
             await config(db),
@@ -473,6 +485,7 @@ export default {
         return json(await listAudit(db, url.searchParams));
       return fail("ไม่พบเส้นทางหรือไม่มีสิทธิ์", 404);
     } catch (e) {
+      if (e instanceof RequestBodyError) return fail(e.message, e.status);
       if (e instanceof QueryError) return fail(e.message);
       if (String(e).includes("UNIQUE constraint"))
         return fail("เลขบัตรประชาชนหรือชื่อผู้ใช้ซ้ำ", 409);
