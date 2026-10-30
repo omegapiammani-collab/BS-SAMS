@@ -1695,3 +1695,112 @@ footer,
     margin-left: 0;
   }
 }
+.thai-date-control {
+  position: relative;
+  width: 100%;
+}
+.thai-date-control input {
+  padding-left: 38px;
+  padding-right: 34px;
+  width: 100%;
+}
+.thai-date-control .date-icon,
+.thai-date-control .date-clear {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 6px;
+  border: 0;
+  background: transparent;
+  color: #64748b;
+}
+.date-icon {
+  left: 5px;
+}
+.date-clear {
+  right: 5px;
+}
+.thai-calendar {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px #163b7126;
+  background: white;
+  color: var(--navy);
+  max-height: calc(100dvh - 24px);
+  overflow: auto;
+}
+.calendar-toolbar {
+  display: grid;
+  grid-template-columns: 30px 1fr 1fr 30px;
+  gap: 6px;
+  align-items: center;
+}
+.calendar-toolbar button {
+  border: 0;
+  padding: 6px;
+}
+.calendar-toolbar select {
+  min-width: 0;
+  padding: 7px;
+  width: 100%;
+}
+.calendar-weekdays,
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 2px;
+}
+.calendar-weekdays {
+  text-align: center;
+  padding: 12px 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.calendar-grid button {
+  border: 0;
+  border-radius: 5px;
+  padding: 0;
+  height: 34px;
+  font-size: 13px;
+  color: var(--navy);
+}
+.calendar-grid .outside-month {
+  color: #64748b;
+}
+.calendar-grid button:disabled {
+  color: #94a3b8;
+  cursor: default;
+}
+.calendar-grid button.picked {
+  background: #1478cb;
+  color: #fff;
+}
+.calendar-grid button:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: -2px;
+}
+.calendar-footer {
+  border-top: 1px solid var(--border);
+  margin-top: 8px;
+  padding-top: 10px;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  font-size: 12px;
+}
+.calendar-footer strong {
+  margin-right: auto;
+}
+.calendar-footer button {
+  border: 0;
+  padding: 6px;
+  font-size: 12px;
+}
+.calendar-footer .calendar-confirm {
+  color: #057855;
+  font-weight: 600;
+}

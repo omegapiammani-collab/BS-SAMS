@@ -219,4 +219,6 @@ test("malformed nested records and duplicate payment identities are rejected", (
   assert.match(validatePerson(p, defaultConfig), /ซ้ำ/);
   p.requests[0].payments = [payment];
   assert.equal(validatePerson(p, defaultConfig), null);
+  p.requests[0].payments[0].detail = "";
+  assert.equal(validatePerson(p, defaultConfig), null);
 });

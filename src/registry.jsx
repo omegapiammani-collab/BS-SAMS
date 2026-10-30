@@ -1158,10 +1158,9 @@ function PersonEditor({ person, readonly, config, user, onClose, onSaved }) {
                               />
                             ))}
                           </div>
-                          <Field label="รายละเอียดความช่วยเหลือ *">
+                          <Field label="รายละเอียดความช่วยเหลือ">
                             <textarea
                               value={x.detail}
-                              required
                               onChange={(e) =>
                                 changeRequest(
                                   r.id,

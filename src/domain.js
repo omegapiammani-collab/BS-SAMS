@@ -306,7 +306,6 @@ export function validatePerson(p, config, today = thailandDate()) {
         typeof x.provider !== "string" ||
         !x.provider.trim() ||
         typeof x.detail !== "string" ||
-        !x.detail.trim() ||
         !Number.isFinite(Number(x.amount || 0)) ||
         !Number.isFinite(Number(x.quantity || 0)) ||
         (!Number(x.amount) && !Number(x.quantity)) ||
@@ -315,7 +314,7 @@ export function validatePerson(p, config, today = thailandDate()) {
         (Number(x.quantity) > 0 &&
           (typeof x.unit !== "string" || !x.unit.trim()))
       )
-        return "กรุณาระบุวันที่หลังยื่นคำขอ หน่วยงาน รายละเอียด และจำนวนพร้อมหน่วยนับ";
+        return "กรุณาระบุวันที่หลังยื่นคำขอ หน่วยงาน และจำนวนพร้อมหน่วยนับ";
     }
   }
   if (

@@ -153,6 +153,47 @@ try {
       .click();
     await page.getByLabel("ชื่อ *", { exact: true }).fill("บุคคลทดสอบ");
     await page.getByLabel("นามสกุล *", { exact: true }).fill("ระบบ");
+    await page.getByLabel("วันเดือนปีเกิด").click();
+    const calendar = page.getByRole("dialog", {
+      name: "เลือกวันที่ พ.ศ.",
+      exact: true,
+    });
+    await calendar.getByLabel("เลือกปี พ.ศ.").selectOption("1953");
+    await calendar.getByLabel("เลือกเดือน").selectOption("02");
+    await calendar
+      .getByRole("button", { name: "01/02/2496", exact: true })
+      .click();
+    await page.screenshot({ path: "/tmp/bs-sams-calendar-desktop.png" });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await calendar.getByRole("button", { name: "ยกเลิก", exact: true }).click();
+    await page.getByLabel("วันเดือนปีเกิด").click();
+    await calendar.getByLabel("เลือกปี พ.ศ.").selectOption("1953");
+    await calendar.getByLabel("เลือกเดือน").selectOption("02");
+    await calendar
+      .getByRole("button", { name: "01/02/2496", exact: true })
+      .click();
+    await page.screenshot({ path: "/tmp/bs-sams-calendar-mobile.png" });
+    await calendar.getByRole("button", { name: "ตกลง", exact: true }).click();
+    assert.equal(
+      await page.getByLabel("วันเดือนปีเกิด").inputValue(),
+      "01/02/2496",
+    );
+    await page.getByLabel("วันเดือนปีเกิด").click();
+    await calendar
+      .getByRole("button", { name: "02/02/2496", exact: true })
+      .click();
+    await calendar.getByRole("button", { name: "ยกเลิก", exact: true }).click();
+    assert.equal(
+      await page.getByLabel("วันเดือนปีเกิด").inputValue(),
+      "01/02/2496",
+    );
+    await page
+      .getByLabel("วันเดือนปีเกิด")
+      .locator("..")
+      .getByRole("button", { name: "ล้างวันที่", exact: true })
+      .click();
+    assert.equal(await page.getByLabel("วันเดือนปีเกิด").inputValue(), "");
+    await page.setViewportSize({ width: 1536, height: 1024 });
     await page.getByLabel("วันเดือนปีเกิด").fill("31/02/2569");
     assert.equal(
       await page
@@ -224,9 +265,12 @@ try {
       .click();
     assert.equal(await page.getByLabel("จำนวนเงิน · บาท").inputValue(), "3000");
 
-    await page
-      .getByLabel("รายละเอียดความช่วยเหลือ *")
-      .fill("ข้อมูลจำลองสำหรับทดสอบ จะลบหลังทดสอบ");
+    assert.equal(
+      await page
+        .getByLabel("รายละเอียดความช่วยเหลือ")
+        .evaluate((el) => el.required),
+      false,
+    );
     for (const amount of ["0.10", "0.20"]) {
       await page
         .getByRole("button", { name: "บันทึกการช่วยเหลือ", exact: true })
@@ -240,7 +284,7 @@ try {
         .last()
         .fill(amount);
       await page
-        .getByLabel("รายละเอียดความช่วยเหลือ *", { exact: true })
+        .getByLabel("รายละเอียดความช่วยเหลือ", { exact: true })
         .last()
         .fill("ทดสอบยอดสตางค์");
     }
@@ -256,6 +300,7 @@ try {
     personId = p.id;
     assert.equal(p.birth, "1990-01-01");
     assert.equal(p.requests[0].payments[0].amount, "3000");
+    assert.equal(p.requests[0].payments[0].detail, "");
     const moneySummary = (await call("/summary?from=2026-10-01&to=2027-09-30"))
       .data;
     assert.equal(moneySummary.amount, 3000.3);
