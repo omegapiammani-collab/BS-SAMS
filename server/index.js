@@ -277,6 +277,21 @@ export default {
         ]);
         return json({ ...p, version: 1 }, 201);
       }
+      const personExportMatch = path.match(/^\/api\/people\/([^/]+)\/export$/);
+      if (personExportMatch && method === "POST") {
+        const stored = await db
+          .prepare("SELECT * FROM people WHERE id=?")
+          .bind(personExportMatch[1])
+          .first();
+        if (!stored || stored.deleted_at) return fail("ไม่พบข้อมูล", 404);
+        if (
+          !allowed(u, "view", stored.village) ||
+          !allowed(u, "export", stored.village)
+        )
+          return fail("ไม่มีสิทธิ์ส่งออกข้อมูลบุคคลนี้", 403);
+        await audit(db, u, "export-person", stored.id).run();
+        return json(personFromRow(stored));
+      }
       const match = path.match(/^\/api\/people\/([^/]+)(\/restore)?$/);
       if (match) {
         const id = match[1],

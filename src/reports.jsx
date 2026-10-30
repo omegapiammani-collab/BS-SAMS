@@ -280,7 +280,7 @@ function safeCell(v) {
   const s = String(v ?? "");
   return /^[=+\-@\t\r]/.test(s) ? "'" + s : s;
 }
-export async function downloadRows(rows, format, name) {
+export async function downloadRows(rows, format, name, pdfOptions) {
   const content = rows.map((r) =>
     r.map((v) =>
       format !== "csv" && typeof v === "number" && Number.isFinite(v)
@@ -303,7 +303,7 @@ export async function downloadRows(rows, format, name) {
     );
   } else if (format === "pdf") {
     const { pdfBlob } = await import("./pdf-export.js");
-    blob = await pdfBlob(rows, name);
+    blob = await pdfBlob(rows, name, pdfOptions);
   } else {
     const { default: ExcelJS } = await import("exceljs");
     const workbook = new ExcelJS.Workbook();

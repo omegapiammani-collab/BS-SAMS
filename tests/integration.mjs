@@ -1,3 +1,4 @@
+import { assertReadable } from "./readability.mjs";
 import { chromium } from "@playwright/test";
 import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
@@ -212,6 +213,13 @@ try {
       .getByRole("button", { name: "เข้าสู่ระบบ", exact: true })
       .click();
     await page.getByRole("heading", { name: "ภาพรวมการช่วยเหลือ" }).waitFor();
+    await assertReadable(page, [
+      { selector: ".page-head p", minimum: 14 },
+      { selector: ".metric-label", minimum: 13 },
+      { selector: ".metric-foot", minimum: 13 },
+      { selector: ".account-identity > span", minimum: 13 },
+    ]);
+
     const rememberedCookie = (await context.cookies()).find(
       (cookie) => cookie.name === "session",
     );
@@ -575,6 +583,30 @@ try {
       await page.getByRole("button", { name: /^เพิ่มคำขอ / }).count(),
       0,
     );
+    const personDownload = page.waitForEvent("download");
+    await page
+      .getByRole("button", { name: "ส่งออก PDF รายบุคคล", exact: true })
+      .click();
+    const personPdf = await personDownload;
+    assert.ok(personPdf.suggestedFilename().endsWith(".pdf"));
+    await personPdf.saveAs("/tmp/bs-sams-person.pdf");
+    const personPdfText = execFileSync(
+      "pdftotext",
+      ["-raw", "/tmp/bs-sams-person.pdf", "-"],
+      { encoding: "utf8" },
+    ).replace(/\s/g, "");
+    for (const value of ["บุคคลทดสอบ", "หน่วยงานทดสอบ", "3,000.30"])
+      assert.ok(personPdfText.includes(value));
+    assert.ok(
+      execFileSync("pdfinfo", ["/tmp/bs-sams-person.pdf"], {
+        encoding: "utf8",
+      }).includes("595.28 x 841.89"),
+    );
+    assert.equal(
+      (await call("/audit?action=export-person&target=" + p.id)).data.total,
+      1,
+    );
+
     await page
       .getByRole("button", { name: "ไปที่คำขอที่ 1", exact: true })
       .click();
@@ -697,6 +729,11 @@ try {
     });
     await page.setViewportSize({ width: 390, height: 844 });
     await page.waitForTimeout(250);
+    await assertReadable(page, [
+      { selector: ".page-head p", minimum: 13 },
+      { selector: ".metric-label", minimum: 13 },
+      { selector: ".metric-foot", minimum: 13 },
+    ]);
     await page.screenshot({ path: "/tmp/bs-sams-mobile.png", fullPage: true });
     assert.equal(
       await page.evaluate(
@@ -869,6 +906,11 @@ try {
       (await call("/people?trash=1")).data.items.some((x) => x.id === p.id),
     );
     assert.equal(
+      (await call("/people/" + p.id + "/export", "POST", {})).status,
+      404,
+    );
+
+    assert.equal(
       (await call("/people/" + p.id + "/restore", "POST", {})).status,
       200,
     );
@@ -918,6 +960,11 @@ try {
     );
     assert.equal((await staffCall("/people/" + p.id, "PUT", p)).status, 403);
     assert.equal(
+      (await staffCall("/people/" + p.id + "/export", "POST", {})).status,
+      403,
+    );
+
+    assert.equal(
       (await staffCall("/export", "POST", { filters: { q: p.id } })).data
         .length,
       0,
@@ -962,6 +1009,59 @@ try {
         ],
       });
       assert.equal(created.status, 201);
+      if (i === 12) {
+        assert.equal(
+          (
+            await staffCall(
+              "/people/" + created.data.id + "/export",
+              "POST",
+              {},
+            )
+          ).status,
+          200,
+        );
+        const account = (await call("/users")).data.find(
+          (user) => user.id === staffId,
+        );
+        assert.equal(
+          (
+            await call("/users", "PUT", {
+              ...account,
+              permissions: ["view", "edit"],
+            })
+          ).status,
+          200,
+        );
+        assert.equal(
+          (
+            await staffCall("/login", "POST", {
+              username: "qa-staff",
+              password: newStaffPass,
+            })
+          ).status,
+          200,
+        );
+        assert.equal(
+          (
+            await staffCall(
+              "/people/" + created.data.id + "/export",
+              "POST",
+              {},
+            )
+          ).status,
+          403,
+        );
+        assert.equal((await call("/users", "PUT", account)).status, 200);
+        assert.equal(
+          (
+            await staffCall("/login", "POST", {
+              username: "qa-staff",
+              password: newStaffPass,
+            })
+          ).status,
+          200,
+        );
+      }
     }
     const secondPage = await call("/people?q=ทดสอบแบ่งหน้า&page=2&size=10");
     assert.equal(secondPage.data.total, 14);

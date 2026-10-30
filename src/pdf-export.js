@@ -11,7 +11,7 @@ async function loadFont(url) {
     binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
   return btoa(binary);
 }
-export async function pdfBlob(rows, title) {
+export async function pdfBlob(rows, title, options) {
   if (!fontsPromise) {
     fontsPromise = Promise.all([loadFont(regularUrl), loadFont(boldUrl)]).catch(
       (error) => {
@@ -28,7 +28,7 @@ export async function pdfBlob(rows, title) {
     try {
       pdfMake
         .createPdf(
-          pdfDocument(rows, title),
+          pdfDocument(rows, options?.title || title, options),
           undefined,
           {
             Sarabun: {

@@ -1,3 +1,4 @@
+import { personExport } from "./person-export.js";
 import { orderRequests } from "./request-order.js";
 import { formatThaiDate } from "./thai-date.js";
 import React, { useEffect, useState, useRef } from "react";
@@ -707,6 +708,23 @@ function PersonEditor({ person, readonly, config, user, onClose, onSaved }) {
       setBusy(false);
     }
   }
+  async function exportPersonPdf() {
+    setBusy(true);
+    setError("");
+    try {
+      const saved = await api("/people/" + person.id + "/export", "POST", {});
+      await downloadRows(
+        personExport(saved, config),
+        "pdf",
+        "รายละเอียดผู้ประสบปัญหา-" + saved.id,
+        { orientation: "portrait", title: "รายละเอียดผู้ประสบปัญหา" },
+      );
+    } catch (error) {
+      setError(error.message);
+    } finally {
+      setBusy(false);
+    }
+  }
   const input = (label, key, type = "text", required = false) => (
     <Field
       key={key}
@@ -732,6 +750,17 @@ function PersonEditor({ person, readonly, config, user, onClose, onSaved }) {
         closeDisabled={busy}
         wide
       >
+        {readonly &&
+          person.id &&
+          can(user, "view", person.village) &&
+          can(user, "export", person.village) && (
+            <div className="person-export-actions">
+              <button type="button" disabled={busy} onClick={exportPersonPdf}>
+                <Download size={16} />
+                ส่งออก PDF รายบุคคล
+              </button>
+            </div>
+          )}
         <form onSubmit={save}>
           <div ref={errorRef} tabIndex={-1}>
             <ErrorBox error={error} />

@@ -1,4 +1,4 @@
-export function pdfDocument(rows, title) {
+export function pdfDocument(rows, title, { orientation = "landscape" } = {}) {
   const columns = Math.max(1, ...rows.map((row) => row.length));
   const groups = [];
   for (const row of rows.length ? rows : [["ไม่มีข้อมูล"]]) {
@@ -12,11 +12,11 @@ export function pdfDocument(rows, title) {
   return {
     info: { title, creator: "BS-SAMS" },
     pageSize: columns > 6 ? "A3" : "A4",
-    pageOrientation: "landscape",
+    pageOrientation: orientation,
     pageMargins: [28, 42, 28, 36],
     defaultStyle: {
       font: "Sarabun",
-      fontSize: columns > 6 ? 9 : 11,
+      fontSize: columns > 6 ? 9 : orientation === "portrait" ? 10 : 11,
       color: "#20324b",
     },
     header: { text: title, bold: true, fontSize: 14, margin: [28, 14, 28, 0] },
@@ -28,11 +28,18 @@ export function pdfDocument(rows, title) {
     }),
     content: groups
       .filter((group) => group.length)
-      .map((group) => {
+      .map((group, index, groups) => {
         const count = Math.max(...group.map((row) => row.length));
-        const pageWidth = columns > 6 ? 1190.55 : 841.89;
+        const pageWidth =
+          orientation === "portrait"
+            ? columns > 6
+              ? 841.89
+              : 595.28
+            : columns > 6
+              ? 1190.55
+              : 841.89;
         return {
-          margin: [0, 0, 0, 12],
+          margin: [0, 0, 0, index === groups.length - 1 ? 0 : 12],
           layout: "lightHorizontalLines",
           table: {
             headerRows: 1,
