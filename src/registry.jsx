@@ -769,7 +769,21 @@ function PersonEditor({ person, readonly, config, user, onClose, onSaved }) {
             <fieldset disabled={readonly}>
               <h3 className="section-title">ข้อมูลส่วนบุคคล</h3>
               <div className="form-grid">
-                {input("เลขบัตรประชาชน · ไม่บังคับ", "nationalId")}
+                <Field
+                  label="เลขบัตรประชาชน · ไม่บังคับ"
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={13}
+                  pattern="[0-9]{13}"
+                  title="กรอกตัวเลข 13 หลักตามบัตรประชาชน"
+                  value={p.nationalId || ""}
+                  onChange={(e) =>
+                    update(
+                      "nationalId",
+                      e.target.value.replace(/[^0-9]/g, "").slice(0, 13),
+                    )
+                  }
+                />
                 <Select
                   label="คำนำหน้า"
                   value={p.title}

@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   age,
+  validNationalId,
   fiscalRange,
   personStatus,
   summarize,
@@ -311,4 +312,19 @@ test("deletion tracking includes assistance within a removed request", () => {
     removedPersonRecords({ requests: [{ id: "r2", payments: [] }] }, old),
     { requests: ["r1"], payments: ["p1", "p2"] },
   );
+});
+
+// Synthetic checksum-valid value, not a fixture from a real person's record.
+test("national ID requires exactly 13 ASCII digits and a valid check digit", () => {
+  assert.equal(validNationalId("1234567890121"), true);
+  for (const value of [
+    "123456789012",
+    "12345678901210",
+    "1234567890122",
+    "123456789012A",
+    "๑๒๓๔๕๖๗๘๙๐๑๒๑",
+    1234567890121,
+    null,
+  ])
+    assert.equal(validNationalId(value), false);
 });

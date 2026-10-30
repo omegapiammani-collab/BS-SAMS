@@ -252,6 +252,20 @@ try {
     await page
       .getByRole("button", { name: "เพิ่มผู้ประสบปัญหา", exact: true })
       .click();
+    const nationalIdInput = page.getByLabel("เลขบัตรประชาชน · ไม่บังคับ");
+    await nationalIdInput.pressSequentially("123456789012199");
+    assert.equal(await nationalIdInput.inputValue(), "1234567890121");
+    await nationalIdInput.fill("abc123-456");
+    assert.equal(await nationalIdInput.inputValue(), "123456");
+    assert.equal(
+      await nationalIdInput.evaluate((el) => el.validity.patternMismatch),
+      true,
+    );
+    await nationalIdInput.fill("");
+    assert.equal(
+      await nationalIdInput.evaluate((el) => el.checkValidity()),
+      true,
+    );
     await page.getByLabel("ชื่อ *", { exact: true }).fill("บุคคลทดสอบ");
     await page.getByLabel("นามสกุล *", { exact: true }).fill("ระบบ");
     await page.getByLabel("วันเดือนปีเกิด").click();

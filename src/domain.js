@@ -119,7 +119,7 @@ export const personLabels = {
   closed: "ยุติคำขอแล้ว",
 };
 export function validNationalId(id) {
-  if (!/^\d{13}$/.test(id)) return false;
+  if (typeof id !== "string" || !/^[0-9]{13}$/.test(id)) return false;
   let n = 0;
   for (let i = 0; i < 12; i++) n += Number(id[i]) * (13 - i);
   return (11 - (n % 11)) % 10 === Number(id[12]);
