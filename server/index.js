@@ -1,3 +1,4 @@
+import { passwordHelp } from "../src/password-policy.js";
 import { validateAccount, validPassword } from "./accounts.js";
 import { listAudit } from "./audit.js";
 import {
@@ -128,13 +129,8 @@ export default {
           !(await verifyPassword(b.current, row.password))
         )
           return fail("รหัสผ่านเดิมไม่ถูกต้อง");
-        if (
-          typeof b.password !== "string" ||
-          b.password.length < 12 ||
-          b.password.length > 128 ||
-          b.password === b.current
-        )
-          return fail("ใช้รหัสผ่านใหม่ 12–128 ตัวอักษร");
+        if (!validPassword(b.password) || b.password === b.current)
+          return fail(passwordHelp);
         await db.batch([
           db
             .prepare("UPDATE users SET password=?,must_change=0 WHERE id=?")
@@ -357,8 +353,7 @@ export default {
         if (id === u.id)
           return fail("กรุณาใช้เมนูเปลี่ยนรหัสผ่านสำหรับบัญชีของคุณ");
         const body = await request.json();
-        if (!validPassword(body?.password))
-          return fail("รหัสผ่านชั่วคราวต้องมี 12–128 ตัวอักษร");
+        if (!validPassword(body?.password)) return fail(passwordHelp);
         const target = await db
           .prepare("SELECT id,active FROM users WHERE id=?")
           .bind(id)

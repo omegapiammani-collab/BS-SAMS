@@ -9,7 +9,7 @@ const account = () => ({
   permissions: ["view", "edit"],
   villages: [1],
   active: true,
-  password: "temporary-password",
+  password: "Temporary-password1!",
 });
 test("account validation rejects malformed values and unknown assignments", () => {
   for (const bad of [
@@ -53,5 +53,14 @@ test("password resets are separate from account edits", () => {
   assert.equal(validateAccount(a, defaultConfig, false), null);
   for (const p of [null, {}, 123, "short", "a".repeat(129)])
     assert.equal(validPassword(p), false);
-  assert.equal(validPassword("a".repeat(12)), true);
+  assert.equal(validPassword("Abcde1!x"), true);
+  for (const p of [
+    "Abcd1!x",
+    "abcdef1!x",
+    "ABCDEF1!X",
+    "Abcdefg!x",
+    "Abcdef12x",
+    "Abcdef12 ",
+  ])
+    assert.equal(validPassword(p), false);
 });

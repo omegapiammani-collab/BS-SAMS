@@ -16,9 +16,9 @@ try {
   const port = portProbe.address().port;
   await new Promise((resolve) => portProbe.close(resolve));
   const origin = `http://127.0.0.1:${port}`,
-    pass = crypto.randomUUID(),
-    nextPass = crypto.randomUUID(),
-    staffPass = crypto.randomUUID();
+    pass = "Aa1!" + crypto.randomUUID(),
+    nextPass = "Abcde1!x",
+    staffPass = "Aa1!" + crypto.randomUUID();
   const env = {
     ...process.env,
     XDG_CONFIG_HOME: "/workspace/BS-SAMS/.wrangler/config",
@@ -119,6 +119,20 @@ try {
     await page
       .getByRole("button", { name: "เข้าสู่ระบบ", exact: true })
       .click();
+    await page.getByLabel("รหัสผ่านปัจจุบัน").waitFor();
+    for (const weak of [
+      "Abcd1!x",
+      "abcdef1!x",
+      "ABCDEF1!X",
+      "Abcdefg!x",
+      "Abcdef12x",
+    ]) {
+      assert.equal(
+        (await call("/password", "POST", { current: pass, password: weak }))
+          .status,
+        400,
+      );
+    }
     await page.getByLabel("รหัสผ่านปัจจุบัน").fill(pass);
     await page.getByLabel("รหัสผ่านใหม่ อย่างน้อย").fill(nextPass);
     await page.getByLabel("ยืนยันรหัสผ่านใหม่").fill(nextPass);
@@ -139,7 +153,18 @@ try {
       .click();
     await page.getByLabel("ชื่อ *", { exact: true }).fill("บุคคลทดสอบ");
     await page.getByLabel("นามสกุล *", { exact: true }).fill("ระบบ");
-    await page.getByLabel("วันเดือนปีเกิด").fill("1990-01-01");
+    await page.getByLabel("วันเดือนปีเกิด").fill("31/02/2569");
+    assert.equal(
+      await page
+        .getByLabel("วันเดือนปีเกิด")
+        .evaluate((el) => el.checkValidity()),
+      false,
+    );
+    await page.getByLabel("วันเดือนปีเกิด").fill("01/01/2533");
+    assert.equal(
+      await page.getByLabel("วันเดือนปีเกิด").inputValue(),
+      "01/01/2533",
+    );
     await page.getByRole("button", { name: "ยกเลิก", exact: true }).click();
     await page
       .getByRole("dialog", { name: "ยังมีข้อมูลที่ไม่ได้บันทึก", exact: true })
@@ -229,6 +254,7 @@ try {
     const people = (await call("/people")).data.items;
     const p = people.find((p) => p.first === "บุคคลทดสอบ");
     personId = p.id;
+    assert.equal(p.birth, "1990-01-01");
     assert.equal(p.requests[0].payments[0].amount, "3000");
     const moneySummary = (await call("/summary?from=2026-10-01&to=2027-09-30"))
       .data;
@@ -298,9 +324,19 @@ try {
         .count(),
       0,
     );
+    assert.equal(await page.locator(".request-card").count(), 0);
+    assert.equal(await page.locator(".request-group").count(), 7);
+    await page.locator(".request-groups").scrollIntoViewIfNeeded();
+    await page.screenshot({ path: "/tmp/bs-sams-request-cards-desktop.png" });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.locator(".request-tile").first().scrollIntoViewIfNeeded();
+    await page.screenshot({ path: "/tmp/bs-sams-request-cards-mobile.png" });
+    await page.setViewportSize({ width: 1536, height: 1024 });
     await page
       .getByRole("button", { name: "ไปที่คำขอที่ 1", exact: true })
       .click();
+    await page.getByRole("heading", { name: /คำขอที่ 1/ }).waitFor();
+    assert.equal(await page.locator(".request-card").count(), 1);
     await page.screenshot({
       path: "/tmp/bs-sams-request-editor-desktop.png",
       fullPage: false,
@@ -317,6 +353,24 @@ try {
       .getByRole("button", { name: "ละทิ้งการเปลี่ยนแปลง", exact: true })
       .click();
     await page.getByRole("dialog").waitFor({ state: "hidden" });
+    await page
+      .getByRole("button", { name: "ดู บุคคลทดสอบ", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "ไปที่คำขอที่ 1", exact: true })
+      .click();
+    assert.equal(
+      await page
+        .getByLabel("ประเภทความช่วยเหลือ *", { exact: true })
+        .isDisabled(),
+      true,
+    );
+    await page
+      .getByRole("button", { name: "กลับไปสรุปคำขอ", exact: true })
+      .click();
+    assert.equal(await page.locator(".request-card").count(), 0);
+    await page.getByRole("button", { name: "ปิด", exact: true }).last().click();
+
     assert.equal((await call("/people")).data.items[0].first, "บุคคลทดสอบ");
 
     const auditBefore = (await call("/audit?size=100")).data.items.filter(
@@ -429,7 +483,7 @@ try {
       (r) =>
         r.url().includes("/api/summary?") && r.url().includes("to=2027-10-31"),
     );
-    await page.getByLabel("ถึงวันที่", { exact: true }).fill("2027-10-31");
+    await page.getByLabel("ถึงวันที่", { exact: true }).fill("31/10/2570");
     const reportSummary = await (await reportResponse).json();
     assert.equal(reportSummary.monthly.length, 13);
     await page
@@ -558,7 +612,7 @@ try {
       200,
     );
     assert.equal((await staffCall("/people")).status, 403);
-    const newStaffPass = crypto.randomUUID();
+    const newStaffPass = "Aa1!" + crypto.randomUUID();
     await staffCall("/password", "POST", {
       current: staffPass,
       password: newStaffPass,
@@ -741,8 +795,8 @@ try {
     });
     await page.setViewportSize({ width: 1536, height: 1024 });
     // Password reset is a separate administrator operation and revokes existing sessions.
-    const tempPassword = crypto.randomUUID(),
-      finalStaffPassword = crypto.randomUUID();
+    const tempPassword = "Aa1!" + crypto.randomUUID(),
+      finalStaffPassword = "Aa1!" + crypto.randomUUID();
     assert.equal(
       (
         await staffCall("/users/" + staffId + "/reset-password", "POST", {
@@ -803,7 +857,7 @@ try {
       .fill(tempPassword);
     await page
       .getByLabel("ยืนยันรหัสผ่านชั่วคราว", { exact: true })
-      .fill(crypto.randomUUID());
+      .fill("Aa1!" + crypto.randomUUID());
     await page
       .getByRole("button", { name: "ยืนยันรีเซ็ตรหัสผ่าน", exact: true })
       .click();
@@ -932,12 +986,14 @@ try {
       path: "/tmp/bs-sams-password-mobile.png",
       fullPage: true,
     });
-    const rotated = crypto.randomUUID();
+    const rotated = "Aa1!" + crypto.randomUUID();
     await page
       .getByLabel("รหัสผ่านปัจจุบัน", { exact: true })
       .fill("wrong-password");
     await page.getByLabel("รหัสผ่านใหม่ อย่างน้อย").fill(rotated);
-    await page.getByLabel("ยืนยันรหัสผ่านใหม่").fill(crypto.randomUUID());
+    await page
+      .getByLabel("ยืนยันรหัสผ่านใหม่")
+      .fill("Aa1!" + crypto.randomUUID());
     await page
       .getByRole("button", { name: "บันทึกรหัสผ่านใหม่", exact: true })
       .click();

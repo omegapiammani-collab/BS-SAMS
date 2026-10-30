@@ -1,3 +1,5 @@
+import { validPassword, passwordHelp } from "../src/password-policy.js";
+export { validPassword } from "../src/password-policy.js";
 import { permissions } from "../src/domain.js";
 export function validateAccount(b, config, creating) {
   if (
@@ -36,11 +38,8 @@ export function validateAccount(b, config, creating) {
     return "ต้องมีสิทธิ์ดูข้อมูลก่อนกำหนดสิทธิ์อื่น";
   if (b.role === "staff" && b.permissions.length && !b.villages.length)
     return "กรุณาเลือกหมู่บ้านอย่างน้อย 1 หมู่บ้าน";
-  if (creating && !validPassword(b.password))
-    return "รหัสผ่านชั่วคราวต้องมี 12–128 ตัวอักษร";
+  if (creating && !validPassword(b.password)) return passwordHelp;
   if (!creating && b.password)
     return "กรุณาใช้ปุ่มรีเซ็ตรหัสผ่านแยกจากการแก้ไขสิทธิ์";
   return null;
 }
-export const validPassword = (value) =>
-  typeof value === "string" && value.length >= 12 && value.length <= 128;

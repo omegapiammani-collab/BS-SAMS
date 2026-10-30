@@ -165,11 +165,11 @@ export function UserAdmin({ config, me }) {
               </Select>
               {!edit.id && (
                 <Field
-                  label="รหัสผ่านชั่วคราว · อย่างน้อย 12 ตัวอักษร"
+                  label="รหัสผ่านชั่วคราว · อย่างน้อย 8 ตัวอักษร · A–Z, a–z, 0–9 และอักขระพิเศษ"
                   type="password"
                   value={edit.password}
                   required
-                  minLength={12}
+                  minLength={8}
                   maxLength={128}
                   autoComplete="new-password"
                   onChange={(e) => change("password", e.target.value)}
@@ -522,7 +522,7 @@ function ResetPasswordDialog({ user, onClose, onSaved }) {
             label="รหัสผ่านชั่วคราวใหม่"
             name="password"
             type="password"
-            minLength={12}
+            minLength={8}
             maxLength={128}
             required
             autoComplete="new-password"
@@ -531,7 +531,7 @@ function ResetPasswordDialog({ user, onClose, onSaved }) {
             label="ยืนยันรหัสผ่านชั่วคราว"
             name="confirm"
             type="password"
-            minLength={12}
+            minLength={8}
             maxLength={128}
             required
             autoComplete="new-password"

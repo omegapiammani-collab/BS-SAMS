@@ -12,7 +12,7 @@
     {
       "binding": "DB",
       "database_name": "bs-sams",
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      "database_id": "8ea1d093-ec9e-4770-8132-f110bb0bb7fa",
       "migrations_dir": "migrations",
     },
   ],

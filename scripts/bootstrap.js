@@ -1,12 +1,13 @@
+import { validPassword, passwordHelp } from "../src/password-policy.js";
 import { hashPassword } from "../server/auth.js";
 import { execFileSync } from "node:child_process";
 import { writeFileSync, unlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 const password = process.env.ADMIN_PASSWORD;
-if (!password || password.length < 12)
+if (!validPassword(password))
   throw new Error(
-    "Set ADMIN_PASSWORD with at least 12 characters. This command creates a local administrator only.",
+    passwordHelp + ". This command creates a local administrator only.",
   );
 const path = join(tmpdir(), `bs-sams-${crypto.randomUUID()}.sql`);
 const hash = await hashPassword(password);

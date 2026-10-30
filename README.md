@@ -21,7 +21,7 @@ npm run build
 สร้างผู้ดูแลระบบในฐานข้อมูล **local** ครั้งแรก โดยตั้ง `ADMIN_PASSWORD` อย่างปลอดภัยใน terminal ไม่บันทึกลงไฟล์หรือ Git:
 
 ```sh
-read -rs -p 'Initial admin password (12+ characters): ' ADMIN_PASSWORD
+read -rs -p 'Initial admin password (8+ characters, uppercase/lowercase/digit/symbol): ' ADMIN_PASSWORD
 export ADMIN_PASSWORD
 npm run bootstrap
 unset ADMIN_PASSWORD
@@ -78,3 +78,9 @@ Integration test สร้าง local D1 และ Worker ชั่วครา
 ดู [โครงสร้างและข้อจำกัด](docs/architecture.md)
 
 หากอัปเดตจากรุ่นแรก ให้รัน `npm run db:migrate` อีกครั้งเพื่อเพิ่มดัชนีและช่องเก็บชื่อบัญชีในประวัติ migration นี้ไม่ลบทะเบียนเดิม
+
+## รหัสผ่านและวันที่
+
+รหัสผ่านใหม่และรหัสผ่านชั่วคราวต้องยาว 8–128 ตัวอักษร ประกอบด้วยตัวพิมพ์ใหญ่ A–Z ตัวพิมพ์เล็ก a–z ตัวเลข และอักขระพิเศษ ผู้ใช้ต้องเปลี่ยนรหัสผ่านชั่วคราวเมื่อเข้าสู่ระบบครั้งแรก
+
+ช่องวันที่ทุกช่องใช้ วัน/เดือน/ปี พ.ศ. เช่น `30/10/2569` โดยส่ง API และบันทึก D1 เป็น `2026-10-30` ตามเดิม ไม่มีการเปลี่ยน timezone ของวันที่ และยังตรวจวันจริงกับช่วงวันที่ที่อนุญาต

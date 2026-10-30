@@ -44,10 +44,10 @@ export function PasswordDialog({ onClose, onSaved }) {
             autoComplete="current-password"
           />
           <Field
-            label="รหัสผ่านใหม่ อย่างน้อย 12 ตัวอักษร"
+            label="รหัสผ่านใหม่ อย่างน้อย 8 ตัวอักษร · A–Z, a–z, 0–9 และอักขระพิเศษ"
             name="password"
             type="password"
-            minLength={12}
+            minLength={8}
             maxLength={128}
             required
             autoComplete="new-password"
@@ -56,7 +56,7 @@ export function PasswordDialog({ onClose, onSaved }) {
             label="ยืนยันรหัสผ่านใหม่"
             name="confirm"
             type="password"
-            minLength={12}
+            minLength={8}
             maxLength={128}
             required
             autoComplete="new-password"
