@@ -1,0 +1,475 @@
+import React, { useEffect, useState } from "react";
+import { Plus, Pencil, Save } from "lucide-react";
+import { api } from "./api";
+import { permissions, permissionLabels, categories } from "./domain";
+import { Modal, Field, Select, ErrorBox } from "./ui";
+export function UserAdmin({ config, me }) {
+  const [users, setUsers] = useState([]),
+    [edit, setEdit] = useState(null),
+    [error, setError] = useState(""),
+    [busy, setBusy] = useState(false);
+  async function load() {
+    try {
+      setUsers(await api("/users"));
+    } catch (e) {
+      setError(e.message);
+    }
+  }
+  useEffect(() => {
+    load();
+  }, []);
+  function change(k, v) {
+    setEdit({ ...edit, [k]: v });
+  }
+  return (
+    <>
+      <ErrorBox error={error} />
+      <section className="panel">
+        <div className="panel-title">
+          <h2>
+            บัญชีผู้ใช้งาน <small>{users.length} บัญชี</small>
+          </h2>
+          <button
+            className="primary"
+            onClick={() => {
+              setError("");
+              setEdit({
+                username: "",
+                name: "",
+                password: "",
+                role: "staff",
+                permissions: ["view", "create", "edit"],
+                villages: [],
+                active: true,
+              });
+            }}
+          >
+            <Plus size={17} />
+            เพิ่มผู้ใช้งาน
+          </button>
+        </div>
+        <div className="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>ชื่อผู้ใช้</th>
+                <th>ชื่อผู้ใช้งาน</th>
+                <th>บทบาท</th>
+                <th>หมู่บ้าน</th>
+                <th>สถานะ</th>
+                <th>จัดการ</th>
+              </tr>
+            </thead>
+            <tbody>
+              {users.map((u) => (
+                <tr key={u.id}>
+                  <td>{u.username}</td>
+                  <td>{u.name}</td>
+                  <td>{u.role === "admin" ? "ผู้ดูแลระบบ" : "เจ้าหน้าที่"}</td>
+                  <td>
+                    {u.role === "admin"
+                      ? "ทุกหมู่บ้าน"
+                      : u.villages.map((v) => "ม." + v).join(", ") ||
+                        "ยังไม่กำหนด"}
+                  </td>
+                  <td>
+                    <span className={"badge " + (u.active ? "done" : "none")}>
+                      {u.active ? "เปิดใช้งาน" : "ปิดใช้งาน"}
+                    </span>
+                  </td>
+                  <td>
+                    <button
+                      onClick={() => {
+                        setError("");
+                        setEdit({ ...u, password: "" });
+                      }}
+                    >
+                      <Pencil size={16} />
+                      แก้ไขสิทธิ์
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+      {edit && (
+        <Modal
+          title={edit.id ? "แก้ไขบัญชีและสิทธิ์" : "เพิ่มบัญชีผู้ใช้งาน"}
+          onClose={() => setEdit(null)}
+        >
+          <form
+            onSubmit={async (e) => {
+              e.preventDefault();
+              setError("");
+              setBusy(true);
+              try {
+                await api("/users", edit.id ? "PUT" : "POST", edit);
+                setEdit(null);
+                load();
+              } catch (e) {
+                setError(e.message);
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            <ErrorBox error={error} />
+            <div className="form-grid">
+              <Field
+                label="ชื่อผู้ใช้ · a–z, 0–9, จุด, ขีด"
+                value={edit.username}
+                required
+                pattern="[a-zA-Z0-9._-]{3,50}"
+                onChange={(e) => change("username", e.target.value)}
+              />
+              <Field
+                label="ชื่อแสดงในระบบ"
+                value={edit.name}
+                required
+                onChange={(e) => change("name", e.target.value)}
+              />
+              <Select
+                label="บทบาท"
+                value={edit.role}
+                onChange={(e) => change("role", e.target.value)}
+                disabled={edit.id === me.id}
+              >
+                <option value="staff">เจ้าหน้าที่</option>
+                <option value="admin">ผู้ดูแลระบบ</option>
+              </Select>
+              <Field
+                label={
+                  edit.id
+                    ? "รหัสชั่วคราวใหม่ · เว้นว่างหากไม่รีเซ็ต"
+                    : "รหัสผ่านชั่วคราว · อย่างน้อย 12 ตัวอักษร"
+                }
+                type="password"
+                value={edit.password}
+                required={!edit.id}
+                minLength={12}
+                maxLength={128}
+                autoComplete="new-password"
+                onChange={(e) => change("password", e.target.value)}
+              />
+            </div>
+            {edit.role === "staff" && (
+              <>
+                <h3>สิทธิ์การใช้งาน</h3>
+                <div className="checkbox-grid">
+                  {permissions.map((p, i) => (
+                    <label key={p}>
+                      <input
+                        type="checkbox"
+                        checked={edit.permissions.includes(p)}
+                        onChange={(e) =>
+                          change(
+                            "permissions",
+                            e.target.checked
+                              ? [...edit.permissions, p]
+                              : edit.permissions.filter((x) => x !== p),
+                          )
+                        }
+                      />
+                      {permissionLabels[i]}
+                    </label>
+                  ))}
+                </div>
+                <h3>หมู่บ้านที่เข้าถึงข้อมูลรายบุคคล</h3>
+                <button
+                  type="button"
+                  onClick={() =>
+                    change(
+                      "villages",
+                      edit.villages.length === config.villages.length
+                        ? []
+                        : config.villages.map((v) => v.id),
+                    )
+                  }
+                >
+                  เลือก / ล้างทั้งหมด
+                </button>
+                <div className="checkbox-grid">
+                  {config.villages.map((v) => (
+                    <label key={v.id}>
+                      <input
+                        type="checkbox"
+                        checked={edit.villages.includes(v.id)}
+                        onChange={(e) =>
+                          change(
+                            "villages",
+                            e.target.checked
+                              ? [...edit.villages, v.id]
+                              : edit.villages.filter((x) => x !== v.id),
+                          )
+                        }
+                      />
+                      ม.{v.id} บ้าน{v.name}
+                    </label>
+                  ))}
+                </div>
+              </>
+            )}
+            {edit.id && (
+              <label className="check">
+                <input
+                  type="checkbox"
+                  checked={edit.active}
+                  disabled={edit.id === me.id}
+                  onChange={(e) => change("active", e.target.checked)}
+                />
+                เปิดใช้งานบัญชี
+              </label>
+            )}
+            <p className="notice">
+              การรีเซ็ตรหัสผ่านจะบังคับให้ผู้ใช้ตั้งรหัสใหม่เมื่อเข้าสู่ระบบครั้งถัดไป
+              การปิดใช้งานบัญชีจะเก็บประวัติการทำรายการไว้
+            </p>
+            <div className="modal-actions">
+              <button type="button" onClick={() => setEdit(null)}>
+                ยกเลิก
+              </button>
+              <button className="primary" disabled={busy}>
+                บันทึกบัญชี
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+    </>
+  );
+}
+export function SystemSettings({ config, onSaved }) {
+  const [c, setC] = useState(() => structuredClone(config)),
+    [error, setError] = useState(""),
+    [saved, setSaved] = useState(false),
+    [busy, setBusy] = useState(false),
+    [tab, setTab] = useState("general"),
+    [audit, setAudit] = useState([]);
+  useEffect(() => {
+    if (tab === "audit")
+      api("/audit")
+        .then(setAudit)
+        .catch((e) => setError(e.message));
+  }, [tab]);
+  async function save(e) {
+    e.preventDefault();
+    setBusy(true);
+    setError("");
+    setSaved(false);
+    try {
+      await api("/config", "PUT", c);
+      onSaved(c);
+      setSaved(true);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <>
+      <div className="tabs settings-tabs">
+        {[
+          ["general", "ข้อมูลระบบ"],
+          ["villages", "หมู่บ้าน"],
+          ["types", "ประเภทความช่วยเหลือ"],
+          ["audit", "ประวัติการใช้งาน"],
+        ].map(([id, l]) => (
+          <button
+            key={id}
+            className={tab === id ? "selected" : ""}
+            onClick={() => setTab(id)}
+          >
+            {l}
+          </button>
+        ))}
+      </div>
+      <section className="panel">
+        <form onSubmit={save}>
+          <ErrorBox error={error} />
+          {saved && (
+            <p role="status" className="success">
+              บันทึกการตั้งค่าเรียบร้อยแล้ว
+            </p>
+          )}
+          {tab === "general" ? (
+            <>
+              <h2>ข้อมูลทั่วไป</h2>
+              <Field
+                label="ชื่อระบบ"
+                value={c.name}
+                required
+                onChange={(e) => setC({ ...c, name: e.target.value })}
+              />
+              <Field label="โลโก้ระบบ · PNG, JPEG, WebP ไม่เกิน 200 KB">
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  onChange={(e) => {
+                    const f = e.target.files[0];
+                    if (!f) return;
+                    if (f.size > 200000) {
+                      setError("โลโก้ต้องไม่เกิน 200 KB");
+                      return;
+                    }
+                    const reader = new FileReader();
+                    reader.onload = () => setC({ ...c, logo: reader.result });
+                    reader.readAsDataURL(f);
+                  }}
+                />
+              </Field>
+              {c.logo && (
+                <div className="actions">
+                  <img
+                    className="logo-preview"
+                    src={c.logo}
+                    alt="ตัวอย่างโลโก้"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setC({ ...c, logo: "" })}
+                  >
+                    ลบโลโก้
+                  </button>
+                </div>
+              )}
+              <p className="muted">
+                กองสวัสดิการสังคม องค์การบริหารส่วนตำบลบ้านเสด็จ
+              </p>
+            </>
+          ) : tab === "villages" ? (
+            <>
+              <h2>หมู่บ้านในตำบลบ้านเสด็จ</h2>
+              <p className="notice">
+                การปิดใช้งานจะซ่อนหมู่บ้านจากการเพิ่มทะเบียนใหม่
+                โดยเก็บข้อมูลเดิมและประวัติไว้
+              </p>
+              {c.villages.map((v, i) => (
+                <div className="setting-row" key={v.id}>
+                  <strong>หมู่ {v.id}</strong>
+                  <input
+                    aria-label={"ชื่อหมู่ " + v.id}
+                    value={v.name}
+                    required
+                    onChange={(e) =>
+                      setC({
+                        ...c,
+                        villages: c.villages.map((x, j) =>
+                          i === j ? { ...x, name: e.target.value } : x,
+                        ),
+                      })
+                    }
+                  />
+                  <label className="check">
+                    <input
+                      type="checkbox"
+                      checked={v.active}
+                      onChange={(e) =>
+                        setC({
+                          ...c,
+                          villages: c.villages.map((x, j) =>
+                            i === j ? { ...x, active: e.target.checked } : x,
+                          ),
+                        })
+                      }
+                    />
+                    ใช้งาน
+                  </label>
+                </div>
+              ))}
+              <button
+                type="button"
+                onClick={() =>
+                  setC({
+                    ...c,
+                    villages: [
+                      ...c.villages,
+                      {
+                        id: Math.max(...c.villages.map((v) => v.id)) + 1,
+                        name: "หมู่บ้านใหม่",
+                        active: true,
+                      },
+                    ],
+                  })
+                }
+              >
+                <Plus size={16} />
+                เพิ่มหมู่บ้าน
+              </button>
+            </>
+          ) : tab === "types" ? (
+            <>
+              <h2>ประเภทความช่วยเหลือ</h2>
+              <p className="notice">
+                แก้ไขรายการประเภทได้ หมวดหมู่หลักคงเดิม
+                การแก้ไขไม่เปลี่ยนประวัติคำขอที่บันทึกไว้แล้ว
+              </p>
+              {c.types.map((t, i) => (
+                <Field
+                  key={t.id}
+                  label={categories[i] + " · หนึ่งประเภทต่อหนึ่งบรรทัด"}
+                >
+                  <textarea
+                    rows={Math.max(3, t.items.length)}
+                    value={t.items.join("\n")}
+                    onChange={(e) =>
+                      setC({
+                        ...c,
+                        types: c.types.map((x, j) =>
+                          i === j
+                            ? { ...x, items: e.target.value.split("\n") }
+                            : x,
+                        ),
+                      })
+                    }
+                  />
+                </Field>
+              ))}
+            </>
+          ) : (
+            <>
+              <h2>ประวัติการใช้งานล่าสุด 200 รายการ</h2>
+              <div className="table-scroll">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>เวลา</th>
+                      <th>ผู้ใช้งาน</th>
+                      <th>การดำเนินการ</th>
+                      <th>รหัสรายการ</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {audit.map((a) => (
+                      <tr key={a.id}>
+                        <td>
+                          {new Date(a.created_at + "Z").toLocaleString(
+                            "th-TH",
+                            { timeZone: "Asia/Bangkok" },
+                          )}
+                        </td>
+                        <td>{a.username || a.actor}</td>
+                        <td>{a.action}</td>
+                        <td>{a.target}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+          {tab !== "audit" && (
+            <div className="modal-actions">
+              <button className="primary" disabled={busy}>
+                <Save size={17} />
+                {busy ? "กำลังบันทึก…" : "บันทึกการตั้งค่า"}
+              </button>
+            </div>
+          )}
+        </form>
+      </section>
+    </>
+  );
+}
