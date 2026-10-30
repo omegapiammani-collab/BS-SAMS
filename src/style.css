@@ -215,25 +215,6 @@ nav button svg:last-child:not(:first-child) {
 .side-note small {
   font-size: 10px;
 }
-.profile {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  padding-top: 18px;
-  border-top: 1px solid var(--border);
-  font-size: 12px;
-}
-.profile strong {
-  display: block;
-  max-width: 130px;
-  overflow-wrap: anywhere;
-}
-.profile span {
-  display: block;
-  font-size: 11px;
-  color: #8793a5;
-  margin-top: 3px;
-}
 .avatar {
   width: 34px;
   height: 34px;
@@ -244,9 +225,7 @@ nav button svg:last-child:not(:first-child) {
   place-items: center;
   font-weight: 700;
 }
-.profile .icon {
-  margin-left: auto;
-}
+
 .workspace {
   margin-left: 248px;
 }
@@ -277,7 +256,18 @@ nav button svg:last-child:not(:first-child) {
   gap: 9px;
   color: #93a0b2;
   font-size: 11px;
-  margin-bottom: 14px;
+  margin-bottom: 0;
+  min-width: 0;
+}
+.breadcrumb > span {
+  white-space: nowrap;
+}
+.breadcrumb > svg {
+  flex-shrink: 0;
+}
+.breadcrumb > [aria-current="page"] {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .page-head {
   display: flex;
@@ -604,16 +594,6 @@ nav button svg:last-child:not(:first-child) {
   font-size: 12px;
   color: #7a8ea8;
   margin: 0;
-}
-footer {
-  font-size: 10px;
-  color: #9aa6b7;
-  margin-top: 32px;
-  padding: 18px 0;
-  border-top: 1px solid var(--border);
-  display: flex;
-  justify-content: space-between;
-  gap: 10px;
 }
 .field {
   display: flex;
@@ -1519,10 +1499,6 @@ summary {
     white-space: nowrap;
     text-overflow: ellipsis;
   }
-  footer {
-    font-size: 9px;
-    flex-direction: column;
-  }
   .request-card {
     padding: 13px;
   }
@@ -1544,7 +1520,6 @@ summary {
 .top-right,
 .brand span,
 .nav-caption,
-footer,
 .empty p {
   color: #68778b;
 }
@@ -1555,14 +1530,7 @@ footer,
 .field > label {
   color: #50617a;
 }
-.account-password {
-  width: 100%;
-  margin-bottom: 16px;
-  color: var(--blue);
-  font-size: 12px;
-  background: #f5f8fc;
-  border: 0;
-}
+
 .report-metrics {
   margin-top: 20px;
 }
@@ -1920,8 +1888,92 @@ footer,
   border-radius: 3px;
   flex-shrink: 0;
 }
-.remember-login-help {
+
+.account-menu {
+  position: relative;
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+.account-trigger {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  border: 0;
+  padding: 8px 0;
+  background: transparent;
+  text-align: left;
+  border-radius: 6px;
+}
+.account-trigger:hover,
+.account-trigger[aria-expanded="true"] {
+  background: #f0f4fb;
+}
+.account-trigger .avatar {
+  flex-shrink: 0;
+}
+.account-identity {
+  min-width: 0;
+  flex: 1;
+}
+.account-identity strong {
+  display: block;
   font-size: 12px;
-  color: #627697;
-  margin: 0 0 8px 28px;
+  color: var(--navy);
+  overflow-wrap: anywhere;
+}
+.account-identity > span {
+  display: block;
+  color: #68778b;
+  font-size: 11px;
+  margin-top: 3px;
+}
+.account-trigger > svg {
+  flex-shrink: 0;
+  color: #68778b;
+}
+.account-trigger > svg.expanded {
+  transform: rotate(180deg);
+}
+.account-dropdown {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  z-index: 40;
+  background: #172e68;
+  padding: 6px;
+  border-radius: 8px;
+  box-shadow: 0 6px 18px #15294d33;
+}
+.account-dropdown button {
+  width: 100%;
+  justify-content: flex-start;
+  gap: 12px;
+  padding: 13px 12px;
+  border: 0;
+  background: transparent;
+  color: #fff;
+  border-radius: 5px;
+  font-size: 13px;
+}
+.account-dropdown button:hover,
+.account-dropdown button:focus-visible {
+  background: #294581;
+}
+.account-dropdown button + button {
+  border-top: 1px solid #ffffff26;
+  border-radius: 0 0 5px 5px;
+}
+
+@media (max-width: 600px) {
+  .sidebar .brand {
+    padding: 24px 16px;
+    gap: 8px;
+    font-size: 20px;
+  }
+  .sidebar .brand > svg,
+  .sidebar .brand > img {
+    flex-shrink: 0;
+  }
 }

@@ -783,14 +783,12 @@ try {
     await page
       .getByLabel("รูปแบบรายงาน", { exact: true })
       .selectOption("village");
-    const villagePanel = page
-      .locator("section.panel")
-      .filter({
-        has: page.getByRole("heading", {
-          name: "จำนวนผู้ประสบปัญหารายหมู่บ้าน",
-          exact: true,
-        }),
-      });
+    const villagePanel = page.locator("section.panel").filter({
+      has: page.getByRole("heading", {
+        name: "จำนวนผู้ประสบปัญหารายหมู่บ้าน",
+        exact: true,
+      }),
+    });
     const villageDownload = page.waitForEvent("download");
     await villagePanel
       .getByRole("button", { name: "EXCEL", exact: true })
@@ -1264,9 +1262,32 @@ try {
     await otherDevice.request.post(origin + "/api/login", {
       data: { username: "qa-admin", password: nextPass },
     });
+    const accountTrigger = page.getByRole("button", { name: /^เมนูผู้ใช้ / });
+    await accountTrigger.click();
+    await page.getByRole("menu", { name: "เมนูบัญชีผู้ใช้" }).waitFor();
+    await page.screenshot({ path: "/tmp/bs-sams-account-menu-desktop.png" });
+    await page.keyboard.press("ArrowDown");
+    assert.equal(
+      await page
+        .getByRole("menuitem", { name: "ออกจากระบบ", exact: true })
+        .evaluate((el) => el === document.activeElement),
+      true,
+    );
+    await page.keyboard.press("Escape");
+    assert.equal(await accountTrigger.getAttribute("aria-expanded"), "false");
+    await accountTrigger.click();
     await page
-      .getByRole("button", { name: "เปลี่ยนรหัสผ่าน", exact: true })
+      .getByRole("heading", { name: "จัดการผู้ใช้งาน", exact: true })
       .click();
+    assert.equal(await accountTrigger.getAttribute("aria-expanded"), "false");
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.getByRole("button", { name: "เปิดเมนู", exact: true }).click();
+    await accountTrigger.click();
+    await page.screenshot({ path: "/tmp/bs-sams-account-menu-mobile.png" });
+    await page
+      .getByRole("menuitem", { name: "เปลี่ยนรหัสผ่าน", exact: true })
+      .click();
+    await page.setViewportSize({ width: 1536, height: 1024 });
     await page.getByRole("dialog").waitFor();
     await page.screenshot({
       path: "/tmp/bs-sams-password-desktop.png",
@@ -1340,6 +1361,24 @@ try {
       ).status,
       200,
     );
+    await page.reload();
+    await page
+      .getByRole("heading", { name: "ภาพรวมการช่วยเหลือ", exact: true })
+      .waitFor();
+    if (
+      await page
+        .getByRole("button", { name: "เปิดเมนู", exact: true })
+        .isVisible()
+    )
+      await page.getByRole("button", { name: "เปิดเมนู", exact: true }).click();
+    await page.getByRole("button", { name: /^เมนูผู้ใช้ / }).click();
+    await page
+      .getByRole("menuitem", { name: "ออกจากระบบ", exact: true })
+      .click();
+    await page
+      .getByRole("heading", { name: "เข้าสู่ระบบ", exact: true })
+      .waitFor();
+    assert.equal((await call("/me")).status, 401);
     await otherDevice.close();
     assert.deepEqual(errors, []);
     console.log(

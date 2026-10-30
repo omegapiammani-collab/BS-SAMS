@@ -1,3 +1,4 @@
+import { AccountMenu } from "./account-menu.jsx";
 import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
@@ -6,8 +7,6 @@ import {
   ChartNoAxesCombined,
   Settings,
   Shield,
-  LogOut,
-  KeyRound,
   Eye,
   EyeOff,
   Menu,
@@ -184,16 +183,9 @@ function Login({ onLogin, change = false, notice = "", username = "" }) {
                   </Field>
                 </div>
                 <label className="remember-login">
-                  <input
-                    type="checkbox"
-                    name="remember"
-                    aria-describedby="remember-login-help"
-                  />
+                  <input type="checkbox" name="remember" />
                   <span>จดจำการเข้าสู่ระบบ</span>
                 </label>
-                <p id="remember-login-help" className="remember-login-help">
-                  คงการเข้าสู่ระบบไว้ 30 วัน
-                </p>
               </>
             )}
             <button className="primary full" disabled={busy}>
@@ -284,7 +276,12 @@ function App() {
             <HeartHandshake size={34} />
           )}
           <div>
-            บ้านเสด็จ<span>ระบบสวัสดิการสังคม</span>
+            อบต.บ้านเสด็จ
+            <span>
+              ระบบติดตามการช่วยเหลือ
+              <br />
+              ผู้ประสบปัญหาทางสังคม
+            </span>
           </div>
         </div>
         <p className="nav-caption">พื้นที่ทำงาน</p>
@@ -318,33 +315,14 @@ function App() {
               <small>อบต.บ้านเสด็จ จังหวัดลำปาง</small>
             </span>
           </div>
-          <button
-            className="account-password"
-            onClick={() => {
+          <AccountMenu
+            user={user}
+            onPassword={() => {
               setPasswordOpen(true);
               setMenu(false);
             }}
-          >
-            <KeyRound size={16} />
-            เปลี่ยนรหัสผ่าน
-          </button>
-          <div className="profile">
-            <div className="avatar">{user.name[0]}</div>
-            <div>
-              <strong>{user.name}</strong>
-              <span>
-                {user.role === "admin" ? "ผู้ดูแลระบบ" : "เจ้าหน้าที่"}
-              </span>
-            </div>
-            <button
-              onClick={logout}
-              className="icon"
-              title="ออกจากระบบ"
-              aria-label="ออกจากระบบ"
-            >
-              <LogOut size={18} />
-            </button>
-          </div>
+            onLogout={logout}
+          />
         </div>
       </aside>
       {menu && <div className="scrim" onClick={() => setMenu(false)} />}
@@ -357,17 +335,19 @@ function App() {
           >
             <Menu />
           </button>
-          <span>{config.name}</span>
+          <div className="breadcrumb" aria-label="ตำแหน่งหน้าปัจจุบัน">
+            <span>พื้นที่ทำงาน</span>
+            <ChevronRight size={13} aria-hidden="true" />
+            <span aria-current="page">
+              {nav.find((n) => n[0] === page)?.[1]}
+            </span>
+          </div>
           <span className="top-right">องค์การบริหารส่วนตำบลบ้านเสด็จ</span>
         </header>
         <main className="content">
           <ErrorBox error={error} />
           <div className="page-head">
             <div>
-              <div className="breadcrumb">
-                พื้นที่ทำงาน <ChevronRight size={13} />{" "}
-                {nav.find((n) => n[0] === page)?.[1]}
-              </div>
               <h1>
                 {page === "dashboard"
                   ? "ภาพรวมการช่วยเหลือ"
@@ -444,10 +424,6 @@ function App() {
               }}
             />
           )}
-          <footer>
-            กองสวัสดิการสังคม อบต.บ้านเสด็จ{" "}
-            <span>ระบบข้อมูลผู้ประสบปัญหาทางสังคม</span>
-          </footer>
         </main>
       </div>
     </div>
