@@ -315,14 +315,6 @@ function App() {
               <small>อบต.บ้านเสด็จ จังหวัดลำปาง</small>
             </span>
           </div>
-          <AccountMenu
-            user={user}
-            onPassword={() => {
-              setPasswordOpen(true);
-              setMenu(false);
-            }}
-            onLogout={logout}
-          />
         </div>
       </aside>
       {menu && <div className="scrim" onClick={() => setMenu(false)} />}
@@ -342,7 +334,14 @@ function App() {
               {nav.find((n) => n[0] === page)?.[1]}
             </span>
           </div>
-          <span className="top-right">องค์การบริหารส่วนตำบลบ้านเสด็จ</span>
+          <AccountMenu
+            user={user}
+            onPassword={() => {
+              setPasswordOpen(true);
+              setMenu(false);
+            }}
+            onLogout={logout}
+          />
         </header>
         <main className="content">
           <ErrorBox error={error} />

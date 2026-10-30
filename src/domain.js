@@ -230,7 +230,7 @@ export const isDate = (s) =>
   /^\d{4}-\d{2}-\d{2}$/.test(s) &&
   !Number.isNaN(Date.parse(s)) &&
   new Date(s).toISOString().slice(0, 10) === s;
-export function validatePerson(p, config, today = thailandDate()) {
+export function validatePerson(p, config, today = thailandDate(), previous) {
   if (!p || typeof p !== "object") return "ข้อมูลไม่ถูกต้อง";
   if (
     typeof p.first !== "string" ||
@@ -330,6 +330,20 @@ export function validatePerson(p, config, today = thailandDate()) {
     )
   )
     return "รหัสรายการคำขอหรือการช่วยเหลือไม่ถูกต้องหรือซ้ำ";
+  const savedRequests = new Map(
+    (previous?.requests || []).map((r) => [r.id, r]),
+  );
+  for (const request of p.requests) {
+    if (request.payments.length <= 1) continue;
+    const saved = savedRequests.get(request.id);
+    const savedIds = new Set(saved?.payments.map((payment) => payment.id));
+    if (
+      !saved ||
+      request.payments.length > saved.payments.length ||
+      request.payments.some((payment) => !savedIds.has(payment.id))
+    )
+      return "คำขอหนึ่งรายการบันทึกการช่วยเหลือได้หนึ่งครั้ง หากช่วยเหลืออีกครั้งกรุณาสร้างคำขอใหม่";
+  }
   return null;
 }
 

@@ -241,3 +241,60 @@ test("saved request categories are immutable while separate new requests are all
     null,
   );
 });
+
+test("one assistance event per request preserves legacy history without allowing additions", () => {
+  const payment = {
+    id: "pay1",
+    date: "2026-10-30",
+    provider: "หน่วยงาน",
+    detail: "",
+    amount: "100",
+    quantity: "",
+    unit: "",
+  };
+  const previous = {
+    first: "ทดสอบ",
+    last: "ระบบ",
+    village: 1,
+    disabilities: [],
+    requests: [
+      {
+        id: "req1",
+        category: "0",
+        type: "ทดสอบ",
+        date: "2026-10-30",
+        status: "done",
+        payments: [payment, { ...payment, id: "pay2" }],
+      },
+    ],
+  };
+  assert.match(
+    validatePerson(previous, defaultConfig, "2026-10-31"),
+    /หนึ่งครั้ง/,
+  );
+  assert.equal(
+    validatePerson(
+      structuredClone(previous),
+      defaultConfig,
+      "2026-10-31",
+      previous,
+    ),
+    null,
+  );
+  const extra = structuredClone(previous);
+  extra.requests[0].payments.push({ ...payment, id: "pay3" });
+  assert.match(
+    validatePerson(extra, defaultConfig, "2026-10-31", previous),
+    /หนึ่งครั้ง/,
+  );
+  const replaced = structuredClone(previous);
+  replaced.requests[0].payments[1].id = "new-id";
+  assert.match(
+    validatePerson(replaced, defaultConfig, "2026-10-31", previous),
+    /หนึ่งครั้ง/,
+  );
+  const single = structuredClone(previous);
+  single.requests[0].payments = [payment];
+  assert.equal(validatePerson(single, defaultConfig, "2026-10-31"), null);
+  assert.match(validatePersonUpdate(single, previous), /ประวัติ/);
+});

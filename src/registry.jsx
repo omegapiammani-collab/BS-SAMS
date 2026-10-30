@@ -680,7 +680,7 @@ function PersonEditor({ person, readonly, config, user, onClose, onSaved }) {
   async function save(e) {
     e.preventDefault();
     setError("");
-    const err = validatePerson(p, config);
+    const err = validatePerson(p, config, undefined, person);
     if (err) {
       setError(err);
       return;
@@ -912,6 +912,18 @@ function PersonEditor({ person, readonly, config, user, onClose, onSaved }) {
                                 <span className={"badge " + r.status}>
                                   {statuses[r.status]}
                                 </span>
+                                {!!r.payments.length && (
+                                  <span className="request-received-date">
+                                    ได้รับการช่วยเหลือ{" "}
+                                    {[
+                                      ...new Set(
+                                        r.payments.map((payment) =>
+                                          formatThaiDate(payment.date),
+                                        ),
+                                      ),
+                                    ].join(", ")}
+                                  </span>
+                                )}
                                 <span className="request-tile-totals">
                                   ช่วยเหลือ {r.payments.length} ครั้ง
                                   <strong>
@@ -998,7 +1010,8 @@ function PersonEditor({ person, readonly, config, user, onClose, onSaved }) {
                   )}
                   <p className="muted">
                     แต่ละวันที่ยื่นให้สร้างคำขอใหม่
-                    ประวัติการช่วยเหลือด้านล่างเป็นของคำขอครั้งนี้เท่านั้น
+                    คำขอแต่ละรายการบันทึกการช่วยเหลือได้หนึ่งครั้ง
+                    หากได้รับความช่วยเหลืออีกครั้งให้สร้างคำขอใหม่
                   </p>
                   <fieldset disabled={readonly}>
                     <div className="form-grid">
@@ -1167,7 +1180,7 @@ function PersonEditor({ person, readonly, config, user, onClose, onSaved }) {
                           </Field>
                         </div>
                       ))}
-                      {!readonly && (
+                      {!readonly && r.payments.length === 0 && (
                         <button
                           type="button"
                           onClick={() =>

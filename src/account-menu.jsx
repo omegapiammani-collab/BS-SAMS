@@ -1,5 +1,5 @@
 import React, { useEffect, useId, useRef, useState } from "react";
-import { ChevronUp, KeyRound, LogOut } from "lucide-react";
+import { ChevronDown, KeyRound, LogOut } from "lucide-react";
 export function AccountMenu({ user, onPassword, onLogout }) {
   const [open, setOpen] = useState(false);
   const root = useRef(null);
@@ -50,7 +50,7 @@ export function AccountMenu({ user, onPassword, onLogout }) {
           <strong>{user.name}</strong>
           <span>{user.role === "admin" ? "ผู้ดูแลระบบ" : "เจ้าหน้าที่"}</span>
         </span>
-        <ChevronUp
+        <ChevronDown
           size={16}
           className={open ? "expanded" : ""}
           aria-hidden="true"

@@ -366,44 +366,32 @@ try {
       .click();
     await page.getByLabel("หน่วยงานผู้ให้ *").fill("หน่วยงานทดสอบ");
     await page.getByLabel("จำนวนเงิน · บาท").fill("3000");
-    await page
-      .getByRole("button", { name: "บันทึกการช่วยเหลือ", exact: true })
-      .click();
+    assert.equal(
+      await page
+        .getByRole("button", { name: "บันทึกการช่วยเหลือ", exact: true })
+        .count(),
+      0,
+    );
     await page
       .getByRole("button", {
-        name: "ลบการช่วยเหลือครั้งที่ 2 ในคำขอที่ 1 ที่ยังไม่บันทึก",
+        name: "ลบการช่วยเหลือครั้งที่ 1 ในคำขอที่ 1 ที่ยังไม่บันทึก",
         exact: true,
       })
       .click();
     await page
-      .getByRole("dialog", { name: "ลบรายการที่ยังไม่บันทึก", exact: true })
       .getByRole("button", { name: "ลบรายการใหม่", exact: true })
       .click();
-    assert.equal(await page.getByLabel("จำนวนเงิน · บาท").inputValue(), "3000");
-
+    await page
+      .getByRole("button", { name: "บันทึกการช่วยเหลือ", exact: true })
+      .click();
+    await page.getByLabel("หน่วยงานผู้ให้ *").fill("หน่วยงานทดสอบ");
+    await page.getByLabel("จำนวนเงิน · บาท").fill("3000.30");
     assert.equal(
       await page
         .getByLabel("รายละเอียดความช่วยเหลือ")
         .evaluate((el) => el.required),
       false,
     );
-    for (const amount of ["0.10", "0.20"]) {
-      await page
-        .getByRole("button", { name: "บันทึกการช่วยเหลือ", exact: true })
-        .click();
-      await page
-        .getByLabel("หน่วยงานผู้ให้ *", { exact: true })
-        .last()
-        .fill("หน่วยงานทดสอบ");
-      await page
-        .getByLabel("จำนวนเงิน · บาท", { exact: true })
-        .last()
-        .fill(amount);
-      await page
-        .getByLabel("รายละเอียดความช่วยเหลือ", { exact: true })
-        .last()
-        .fill("ทดสอบยอดสตางค์");
-    }
     await page.getByText("3,000.30 บาท", { exact: true }).waitFor();
     await page.getByLabel("สถานะ", { exact: true }).selectOption("done");
     await page
@@ -415,8 +403,44 @@ try {
     const p = people.find((p) => p.first === "บุคคลทดสอบ");
     personId = p.id;
     assert.equal(p.birth, "1990-01-01");
-    assert.equal(p.requests[0].payments[0].amount, "3000");
+    assert.equal(p.requests[0].payments[0].amount, "3000.30");
     assert.equal(p.requests[0].payments[0].detail, "");
+    assert.equal(
+      (
+        await call("/people/" + p.id, "PUT", {
+          ...p,
+          requests: [
+            {
+              ...p.requests[0],
+              payments: [
+                ...p.requests[0].payments,
+                { ...p.requests[0].payments[0], id: crypto.randomUUID() },
+              ],
+            },
+          ],
+        })
+      ).status,
+      400,
+    );
+    assert.equal(
+      (
+        await call("/people", "POST", {
+          ...p,
+          nationalId: "",
+          requests: [
+            {
+              ...p.requests[0],
+              payments: [
+                ...p.requests[0].payments,
+                { ...p.requests[0].payments[0], id: crypto.randomUUID() },
+              ],
+            },
+          ],
+        })
+      ).status,
+      400,
+    );
+
     assert.equal(
       (
         await call("/people/" + p.id, "PUT", {
@@ -496,6 +520,11 @@ try {
     );
     assert.equal(await page.locator(".request-card").count(), 0);
     assert.equal(await page.locator(".request-group").count(), 7);
+    assert.ok(
+      (await page.locator(".request-received-date").innerText()).includes(
+        "ได้รับการช่วยเหลือ",
+      ),
+    );
     await page.locator(".request-groups").scrollIntoViewIfNeeded();
     await page.screenshot({ path: "/tmp/bs-sams-request-cards-desktop.png" });
     await page.setViewportSize({ width: 390, height: 844 });
@@ -536,7 +565,7 @@ try {
       .getByRole("button", { name: "ลบรายการใหม่", exact: true })
       .click();
     assert.equal(await page.locator(".request-tile").count(), 1);
-    assert.equal(await page.locator(".request-card .payment").count(), 3);
+    assert.equal(await page.locator(".request-card .payment").count(), 1);
 
     assert.equal(await page.locator(".request-card").count(), 1);
     await page.screenshot({
@@ -1263,6 +1292,20 @@ try {
       data: { username: "qa-admin", password: nextPass },
     });
     const accountTrigger = page.getByRole("button", { name: /^เมนูผู้ใช้ / });
+    assert.equal(
+      await page
+        .locator("header.topbar")
+        .getByRole("button", { name: /^เมนูผู้ใช้ / })
+        .count(),
+      1,
+    );
+    assert.equal(
+      await page
+        .locator("aside")
+        .getByRole("button", { name: /^เมนูผู้ใช้ / })
+        .count(),
+      0,
+    );
     await accountTrigger.click();
     await page.getByRole("menu", { name: "เมนูบัญชีผู้ใช้" }).waitFor();
     await page.screenshot({ path: "/tmp/bs-sams-account-menu-desktop.png" });
@@ -1281,7 +1324,6 @@ try {
       .click();
     assert.equal(await accountTrigger.getAttribute("aria-expanded"), "false");
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.getByRole("button", { name: "เปิดเมนู", exact: true }).click();
     await accountTrigger.click();
     await page.screenshot({ path: "/tmp/bs-sams-account-menu-mobile.png" });
     await page
@@ -1365,12 +1407,6 @@ try {
     await page
       .getByRole("heading", { name: "ภาพรวมการช่วยเหลือ", exact: true })
       .waitFor();
-    if (
-      await page
-        .getByRole("button", { name: "เปิดเมนู", exact: true })
-        .isVisible()
-    )
-      await page.getByRole("button", { name: "เปิดเมนู", exact: true }).click();
     await page.getByRole("button", { name: /^เมนูผู้ใช้ / }).click();
     await page
       .getByRole("menuitem", { name: "ออกจากระบบ", exact: true })

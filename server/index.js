@@ -307,7 +307,7 @@ export default {
             !allowed(u, "view", p.village)
           )
             return fail("ไม่มีสิทธิ์", 403);
-          const err = validatePerson(p, await config(db));
+          const err = validatePerson(p, await config(db), undefined, old);
           if (err) return fail(err);
           if (p.version !== stored.version)
             return fail("มีผู้แก้ไขข้อมูลแล้ว กรุณาโหลดใหม่", 409);

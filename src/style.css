@@ -240,11 +240,7 @@ nav button svg:last-child:not(:first-child) {
   color: #50627b;
   gap: 16px;
 }
-.top-right {
-  margin-left: auto;
-  font-size: 12px;
-  color: #8793a5;
-}
+
 .content {
   padding: 27px 32px;
   max-width: 1750px;
@@ -1260,9 +1256,6 @@ summary {
     padding: 9px;
     grid-template-columns: 24px 1fr;
   }
-  .top-right {
-    display: none;
-  }
 }
 @media (max-width: 900px) {
   .sidebar {
@@ -1517,7 +1510,6 @@ summary {
 .metric-foot,
 .panel-note,
 .breadcrumb,
-.top-right,
 .brand span,
 .nav-caption,
 .empty p {
@@ -1891,8 +1883,8 @@ summary {
 
 .account-menu {
   position: relative;
-  border-top: 1px solid var(--border);
-  padding-top: 12px;
+  margin-left: auto;
+  flex: 0 0 190px;
 }
 .account-trigger {
   display: flex;
@@ -1920,7 +1912,9 @@ summary {
   display: block;
   font-size: 12px;
   color: var(--navy);
-  overflow-wrap: anywhere;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .account-identity > span {
   display: block;
@@ -1937,11 +1931,11 @@ summary {
 }
 .account-dropdown {
   position: absolute;
-  bottom: calc(100% + 8px);
-  left: 0;
+  top: calc(100% + 8px);
   right: 0;
+  width: 220px;
   z-index: 40;
-  background: #172e68;
+  background: var(--blue);
   padding: 6px;
   border-radius: 8px;
   box-shadow: 0 6px 18px #15294d33;
@@ -1959,7 +1953,7 @@ summary {
 }
 .account-dropdown button:hover,
 .account-dropdown button:focus-visible {
-  background: #294581;
+  background: #003f8e;
 }
 .account-dropdown button + button {
   border-top: 1px solid #ffffff26;
@@ -1976,4 +1970,38 @@ summary {
   .sidebar .brand > img {
     flex-shrink: 0;
   }
+}
+
+.topbar {
+  position: relative;
+  z-index: 20;
+}
+@media (max-width: 600px) {
+  .topbar {
+    gap: 10px;
+    padding-inline: 14px;
+  }
+  .topbar .breadcrumb {
+    flex: 1;
+    gap: 4px;
+  }
+  .topbar .breadcrumb > span:first-child {
+    display: none;
+  }
+  .topbar .breadcrumb > svg {
+    display: none;
+  }
+  .account-menu {
+    flex-basis: 144px;
+  }
+  .account-trigger {
+    gap: 7px;
+  }
+}
+
+.request-received-date {
+  font-size: 12px;
+  color: #057855;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
 }
