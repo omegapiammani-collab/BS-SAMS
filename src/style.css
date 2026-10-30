@@ -1594,3 +1594,227 @@ footer,
   color: var(--navy);
   font-variant-numeric: tabular-nums;
 }
+.person-identity {
+  display: flex;
+  gap: 18px;
+  align-items: flex-start;
+}
+.person-identity h2 {
+  font-size: 23px;
+  margin: 0 0 10px;
+}
+.person-identity p {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  margin: 13px 0 0;
+  color: #65758a;
+}
+.person-identity a {
+  color: var(--blue);
+}
+.detail-avatar {
+  background: #edf4ff;
+  width: 60px;
+  height: 60px;
+  display: grid;
+  place-items: center;
+  color: var(--blue);
+  border-radius: 12px;
+  flex-shrink: 0;
+}
+.detail-totals {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 15px;
+  margin: 25px 0;
+}
+.detail-totals > div {
+  background: #f5f8fc;
+  padding: 17px;
+  border-radius: 7px;
+}
+.detail-totals span {
+  font-size: 12px;
+  color: #68778b;
+  display: block;
+}
+.detail-totals strong {
+  font-size: 23px;
+  display: block;
+  margin-top: 8px;
+  color: var(--navy);
+}
+.detail-totals small {
+  font-size: 12px;
+  font-weight: 400;
+}
+.detail-facts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 24px;
+}
+.detail-facts > div {
+  padding: 13px 0;
+  border-bottom: 1px solid var(--border);
+  min-width: 0;
+}
+.detail-facts dt {
+  font-size: 12px;
+  color: #68778b;
+  margin-bottom: 6px;
+}
+.detail-facts dd {
+  font-size: 14px;
+  margin: 0;
+  overflow-wrap: anywhere;
+  line-height: 1.7;
+}
+.detail-request {
+  border: 1px solid var(--border);
+  padding: 20px;
+  border-radius: 8px;
+  margin: 20px 0;
+}
+.detail-request h3 {
+  font-size: 16px;
+  margin-top: 8px;
+}
+.detail-request small,
+.detail-date {
+  font-size: 12px;
+  color: #68778b;
+}
+.detail-request h4 {
+  font-size: 13px;
+  margin: 0;
+}
+.detail-note {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+  line-height: 1.8;
+  background: #f8fafc;
+  padding: 15px;
+  border-radius: 5px;
+}
+.assistance-history {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 0 5px;
+}
+.assistance-history li {
+  border-left: 2px solid #c9ddf3;
+  padding: 0 0 20px 20px;
+  position: relative;
+}
+.assistance-history li:before {
+  content: "";
+  position: absolute;
+  left: -5px;
+  top: 4px;
+  width: 8px;
+  height: 8px;
+  background: var(--blue);
+  border-radius: 50%;
+}
+.assistance-event {
+  font-size: 13px;
+}
+.assistance-event > span {
+  display: block;
+  color: #68778b;
+  margin-top: 5px;
+}
+.assistance-event p {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin: 10px 0;
+}
+.event-values {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  color: var(--green);
+}
+@media (max-width: 600px) {
+  .detail-facts {
+    grid-template-columns: 1fr;
+  }
+  .detail-totals {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  .detail-totals > div {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px;
+  }
+  .detail-totals strong {
+    font-size: 19px;
+    margin: 0;
+  }
+  .person-identity {
+    gap: 12px;
+  }
+  .person-identity h2 {
+    font-size: 19px;
+  }
+  .detail-avatar {
+    width: 42px;
+    height: 42px;
+  }
+  .detail-request {
+    padding: 14px;
+  }
+  .detail-request > .panel-title {
+    flex-wrap: wrap;
+  }
+  .detail-request .panel-title strong {
+    font-size: 13px;
+  }
+  .event-values {
+    flex-wrap: wrap;
+  }
+}
+.advanced-filters {
+  border-top: 1px solid var(--border);
+  padding-top: 15px;
+  margin-top: 4px;
+}
+.advanced-filters summary {
+  font-weight: 600;
+  margin-bottom: 16px;
+}
+.advanced-filters p {
+  font-size: 10px;
+  line-height: 1.6;
+}
+.filters .field select {
+  max-width: 100%;
+}
+@media (min-width: 601px) and (max-width: 900px) {
+  .advanced-filters {
+    grid-column: 1/-1;
+  }
+}
+.registry-layout .results {
+  align-self: start;
+}
+.duplicate-list article {
+  border: 1px solid var(--border);
+  padding: 16px;
+  border-radius: 7px;
+  margin: 12px 0;
+}
+.duplicate-list p {
+  font-size: 12px;
+  color: #68778b;
+  margin: 8px 0 12px;
+}
+.duplicate-list strong {
+  font-size: 15px;
+}

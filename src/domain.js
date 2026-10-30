@@ -54,6 +54,7 @@ export const permissionLabels = [
   "ส่งออก",
 ];
 export const defaultConfig = {
+  revision: 0,
   name: "ระบบข้อมูลผู้ประสบปัญหาทางสังคม",
   logo: "",
   villages: villageNames.map((name, i) => ({ id: i + 1, name, active: true })),
@@ -241,6 +242,21 @@ export function validatePerson(p, config, today = thailandDate()) {
     p.last.length > 100
   )
     return "กรุณาระบุชื่อและนามสกุล";
+  for (const [key, max] of [
+    ["title", 50],
+    ["marital", 100],
+    ["houseCode", 50],
+    ["house", 100],
+    ["phone", 20],
+    ["nationalId", 13],
+    ["birth", 10],
+  ])
+    if (
+      p[key] !== undefined &&
+      p[key] !== null &&
+      (typeof p[key] !== "string" || p[key].length > max)
+    )
+      return "รูปแบบข้อมูลส่วนบุคคลไม่ถูกต้อง";
   if (!config.villages.some((v) => v.id === Number(p.village)))
     return "หมู่บ้านไม่ถูกต้อง";
   if (p.nationalId && !validNationalId(p.nationalId))
@@ -270,6 +286,16 @@ export function validatePerson(p, config, today = thailandDate()) {
       !r.type.trim()
     )
       return "กรุณาระบุประเภท วันที่ และสถานะคำขอ";
+    if (
+      r.type.length > 300 ||
+      (r.note !== undefined &&
+        r.note !== null &&
+        (typeof r.note !== "string" || r.note.length > 5000)) ||
+      (r.reason !== undefined &&
+        r.reason !== null &&
+        (typeof r.reason !== "string" || r.reason.length > 1000))
+    )
+      return "บันทึกคำขอหรือเหตุผลไม่ถูกต้องหรือยาวเกินกำหนด";
     if (r.date > today || (p.birth && r.date < p.birth))
       return "วันที่ยื่นคำขอต้องไม่อยู่ในอนาคตหรือก่อนวันเกิด";
     if (
@@ -283,6 +309,17 @@ export function validatePerson(p, config, today = thailandDate()) {
       return "กรุณาบันทึกการช่วยเหลือก่อนระบุว่าช่วยเหลือแล้ว";
     for (const x of r.payments) {
       if (x && typeof x === "object") {
+        if (
+          typeof x.provider !== "string" ||
+          x.provider.length > 200 ||
+          typeof x.detail !== "string" ||
+          x.detail.length > 5000 ||
+          (x.unit !== undefined &&
+            x.unit !== null &&
+            (typeof x.unit !== "string" || x.unit.length > 100))
+        )
+          return "รายละเอียดการช่วยเหลือไม่ถูกต้องหรือยาวเกินกำหนด";
+
         if (!validMoney(x.amount))
           return "จำนวนเงินต้องเป็นศูนย์หรือจำนวนบวก มีทศนิยมไม่เกิน 2 ตำแหน่ง และไม่เกิน 999,999,999.99 บาท";
         if (x.date > today)

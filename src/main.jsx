@@ -1,3 +1,7 @@
+import {
+  NavigationGuardProvider,
+  useGuardedNavigation,
+} from "./navigation-guard";
 import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
@@ -166,6 +170,7 @@ function Login({ onLogin, change = false, notice = "" }) {
   );
 }
 function App() {
+  const requestNavigation = useGuardedNavigation();
   const [user, setUser] = useState(undefined),
     [config, setConfig] = useState(defaultConfig),
     [page, setPage] = useState("dashboard"),
@@ -207,9 +212,13 @@ function App() {
       />
     );
   async function logout() {
-    await api("/logout", "POST", {});
-    setUser(null);
-    setPage("dashboard");
+    try {
+      await api("/logout", "POST", {});
+      setUser(null);
+      setPage("dashboard");
+    } catch (e) {
+      setError(e.message);
+    }
   }
   return (
     <div className="app">
@@ -247,8 +256,14 @@ function App() {
                 key={id}
                 className={page === id ? "active" : ""}
                 onClick={() => {
-                  setPage(id);
-                  setMenu(false);
+                  if (id === page) {
+                    setMenu(false);
+                    return;
+                  }
+                  requestNavigation(() => {
+                    setPage(id);
+                    setMenu(false);
+                  });
                 }}
               >
                 <Icon size={20} />
@@ -269,8 +284,10 @@ function App() {
           <button
             className="account-password"
             onClick={() => {
-              setPasswordOpen(true);
-              setMenu(false);
+              requestNavigation(() => {
+                setPasswordOpen(true);
+                setMenu(false);
+              });
             }}
           >
             <KeyRound size={16} />
@@ -285,7 +302,7 @@ function App() {
               </span>
             </div>
             <button
-              onClick={logout}
+              onClick={() => requestNavigation(logout)}
               className="icon"
               title="ออกจากระบบ"
               aria-label="ออกจากระบบ"
@@ -401,4 +418,8 @@ function App() {
     </div>
   );
 }
-createRoot(document.getElementById("root")).render(<App />);
+createRoot(document.getElementById("root")).render(
+  <NavigationGuardProvider>
+    <App />
+  </NavigationGuardProvider>,
+);

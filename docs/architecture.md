@@ -55,3 +55,39 @@ Password reset is separate from permission editing. `POST /api/users/:id/reset-p
 Money conversion and formatting live in src/money.js. New assistance amounts must be nonnegative, finite, at most 999,999,999.99 THB per event, and precise to satang. Report totals accumulate integer satang and convert to THB only after summation, so 0.10 + 0.20 is reported as 0.30. Existing JSON amount fields remain unchanged; no data rewrite or schema migration is needed. Legacy amounts with fractional satang are rounded per event when deriving reports; editing those events requires correcting their precision. Invalid draft amounts display a correction prompt instead of a misleading zero total.
 
 Request cards show the sum of assistance amounts. Item quantities may be fractional and require a unit for positive quantities. Request dates cannot precede birth or be in the future; assistance dates cannot precede the request or be in the future. Both browser constraints and API validation use the Thailand calendar date. Excel generation preserves finite numeric values as numeric cells, while text remains text and formula prefixes are escaped. CSV keeps its UTF-8 BOM and quoted text fields.
+
+## Versioned system configuration
+
+Configuration JSON includes revision, defaulting to 0 for existing configurations without a revision field. GET /api/config always returns it. PUT requires the matching revision and performs a conditional upsert that increments it. The audit insert is conditional on that write succeeding, in the same batch. Two concurrent initial saves cannot both succeed. Stale writes return 409 and leave the stored settings and audit unchanged. No schema migration is needed.
+
+Configuration parsing returns only known fields, trims names, removes blank or duplicate assistance type entries, and derives fixed category names from the domain list. Village IDs must remain present once saved; deactivation preserves historical addresses and permission assignments. New records and address moves require active villages; an existing record may retain its inactive address. The browser selects the first active village authorized for creation and disables creation when none exists.
+
+The settings form keeps its draft on a conflict. Loading the latest configuration asks for confirmation when the draft differs from the last loaded or saved value. Saves use the normalized server response as the next baseline. The browser also registers a beforeunload warning while settings are dirty; it does not persist a draft or merge conflicting edits automatically.
+
+## Person list and full-record access
+
+Registry list items are explicit summaries containing ID, title, first/last names, derived age, village, person status and seven category statuses. Administrator trash lists also include deletion metadata. They omit birth date, national ID, telephone, house fields, disability fields, request notes, request/payment bodies and version. Internal SQL filtering still supports exact or partial national ID searches without returning that value in the list response.
+
+`GET /api/people/:id` returns the full current record and version only after checking view permission for its current village. Missing, deleted and unauthorized records all return 404. Both the view and edit controls fetch through this endpoint rather than editing a stale list object. Obsolete requests are aborted when the dialog closes or changes mode. Export endpoints retain their existing separately checked contracts.
+
+PersonDetails renders read-only facts, Thai calendar dates, overall totals, per-request status and closure reasons, and assistance events ordered by date. No disabled form inputs are used for reading. The edit button appears only for users with edit permission and requests the latest record again. Profile text, notes and assistance description fields are validated as bounded text at the API boundary to prevent malformed values breaking the display.
+
+## Application navigation and dirty drafts
+
+NavigationGuardProvider keeps a set of dirty form IDs in memory. useUnsavedChanges registers each form's boolean dirty state with that provider while retaining its browser beforeunload listener. Sidebar route changes, explicit logout, and entering the password-change workflow use the provider's guarded request method. Selecting the current route does not prompt. Cancelling the confirmation preserves the form; confirming runs the pending action. No draft fields, passwords or personal records are stored in the provider or persisted to browser storage.
+
+Account editor opening captures a baseline and closing through Cancel, the close icon or Escape prompts only when values differ. Inputs are disabled while saving. Successful saves and component unmounts unregister their blockers. Settings success notices disappear after further edits. Session-expired events close pending navigation confirmations and return to login without waiting for a discard decision, so draft protection never extends expired access. This does not provide autosave or crash recovery.
+
+## Additional registry filters
+
+Registry and person exports accept ageGroup (child, youth, adult, senior, unknown), disability (none or 0–6), requestType, requestFrom and requestTo. Age is computed in D1 against the current Thailand date using the same birthday rule as the display; unknown matches missing birth dates. Disability membership is checked against the domain's seven stored labels and supports people with multiple disabilities.
+
+Category, request type and request dates are combined inside one EXISTS predicate over requests. They cannot be satisfied by different requests belonging to the same person. Person status, village, identity search, age and disability remain person-level predicates. Type matching is exact; the browser provides current configured choices plus free-text entry for historical types. Date bounds are inclusive, optional and validated as real ordered dates. Additional fields are collapsed by default and cleared by the existing reset controls.
+
+Permission village IDs are bound as one JSON array and expanded through json_each rather than a variable-length placeholder list. This keeps parameter counts bounded even when combining every filter. Filtering still precedes count and pagination, and exports use the same builder without the page limit. These filters do not add sensitive fields to registry list responses.
+
+## Advisory duplicate checks
+
+`POST /api/people/duplicate-check` accepts first/last names with optional birth date, phone, national ID and current person ID. It applies the same view/village scope as registry queries, excludes deleted records and the current ID, and returns at most five list-summary candidates plus their match reason and scoped total. A national-ID match is ordered first. Names alone do not trigger a warning; a birth-date or phone match must corroborate them. Identity data is carried in JSON rather than a URL.
+
+PersonEditor checks before creation or when identity fields change. Users may preview an authorized existing record in a separate read-only dialog while their draft remains mounted. For name/birth or name/phone matches, an explicit confirmation can create or save a distinct person. A visible national-ID match has no override button. The database unique constraint remains the final authority for national IDs across all records, including deleted and unauthorized ones; those records are not revealed by this advisory endpoint. These are exact-field checks, not fuzzy matching, merging, or a global guarantee against concurrent no-ID duplicate creation. No data is automatically merged or deleted.

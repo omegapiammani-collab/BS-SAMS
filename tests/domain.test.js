@@ -220,3 +220,37 @@ test("malformed nested records and duplicate payment identities are rejected", (
   p.requests[0].payments = [payment];
   assert.equal(validatePerson(p, defaultConfig), null);
 });
+
+test("displayed personal fields and notes must be text, not nested objects", () => {
+  const p = {
+    title: "นาย",
+    first: "ทดสอบ",
+    last: "ระบบ",
+    village: 1,
+    disabilities: [],
+    requests: [],
+  };
+  for (const key of ["title", "marital", "house", "phone", "nationalId"])
+    assert.ok(validatePerson({ ...p, [key]: {} }, defaultConfig));
+  const r = {
+    id: "r1",
+    category: "0",
+    type: "ทดสอบ",
+    date: "2026-10-01",
+    status: "pending",
+    payments: [],
+  };
+  assert.ok(
+    validatePerson(
+      { ...p, requests: [{ ...r, note: { unexpected: true } }] },
+      defaultConfig,
+    ),
+  );
+  assert.equal(
+    validatePerson(
+      { ...p, requests: [{ ...r, note: "ข้อความที่อ่านได้" }] },
+      defaultConfig,
+    ),
+    null,
+  );
+});

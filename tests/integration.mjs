@@ -227,8 +227,105 @@ try {
     await page.getByRole("dialog").waitFor({ state: "hidden" });
     await page.getByText("บุคคลทดสอบ ระบบ", { exact: false }).first().waitFor();
     const people = (await call("/people")).data.items;
-    const p = people.find((p) => p.first === "บุคคลทดสอบ");
+    const listPerson = people.find((p) => p.first === "บุคคลทดสอบ");
+    const p = (await call("/people/" + listPerson.id)).data;
+    await page.getByText("ตัวกรองเพิ่มเติม", { exact: true }).click();
+    await page
+      .getByLabel("ประเภทความช่วยเหลือ", { exact: true })
+      .selectOption("0");
+    await page.getByLabel("ช่วงวัย", { exact: true }).selectOption("adult");
+    await page
+      .getByLabel("ประเภทความพิการ", { exact: true })
+      .selectOption("none");
+    await page
+      .getByLabel("ประเภทความช่วยเหลือย่อย", { exact: true })
+      .fill(p.requests[0].type);
+    await page
+      .getByLabel("ยื่นคำขอตั้งแต่วันที่", { exact: true })
+      .fill(p.requests[0].date);
+    await page
+      .getByLabel("ยื่นคำขอถึงวันที่", { exact: true })
+      .fill(p.requests[0].date);
+    const advancedResponse = page.waitForResponse(
+      (r) =>
+        r.url().includes("/api/people?") && r.url().includes("ageGroup=adult"),
+    );
+    await page.getByRole("button", { name: "ค้นหา", exact: true }).click();
+    assert.equal((await (await advancedResponse).json()).total, 1);
+    await page
+      .getByRole("button", { name: "ดู บุคคลทดสอบ", exact: true })
+      .waitFor();
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.screenshot({
+      path: "/tmp/bs-sams-advanced-search-desktop.png",
+      fullPage: true,
+    });
+    await page.setViewportSize({ width: 390, height: 844 });
+    assert.equal(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth > innerWidth,
+      ),
+      false,
+    );
+    await page.screenshot({
+      path: "/tmp/bs-sams-advanced-search-mobile.png",
+      fullPage: true,
+    });
+    await page.setViewportSize({ width: 1536, height: 1024 });
+    assert.equal((await call("/people?ageGroup=other")).status, 400);
+    assert.equal(
+      (
+        await call("/export", "POST", {
+          filters: { ageGroup: "senior", q: p.id },
+        })
+      ).data.length,
+      0,
+    );
+
     personId = p.id;
+    for (const field of [
+      "nationalId",
+      "phone",
+      "birth",
+      "house",
+      "houseCode",
+      "disabilities",
+      "requests",
+    ])
+      assert.equal(Object.hasOwn(listPerson, field), false);
+    await page
+      .getByRole("button", { name: "ดู บุคคลทดสอบ", exact: true })
+      .click();
+    const details = page.getByRole("dialog", {
+      name: "รายละเอียดผู้ประสบปัญหา",
+      exact: true,
+    });
+    await details
+      .getByRole("heading", { name: "นายบุคคลทดสอบ ระบบ", exact: true })
+      .waitFor();
+    assert.equal(await details.getByRole("textbox").count(), 0);
+    await details.getByText("3,000.30", { exact: false }).first().waitFor();
+    assert.equal(
+      await details.getByText("หน่วยงานทดสอบ", { exact: true }).count(),
+      3,
+    );
+    await page.screenshot({
+      path: "/tmp/bs-sams-person-details-desktop.png",
+      fullPage: false,
+    });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.screenshot({
+      path: "/tmp/bs-sams-person-details-mobile.png",
+      fullPage: false,
+    });
+    await page.setViewportSize({ width: 1536, height: 1024 });
+    await details
+      .getByRole("button", { name: "แก้ไขข้อมูล", exact: true })
+      .click();
+    await page.getByLabel("ชื่อ *", { exact: true }).waitFor();
+    await page.getByRole("button", { name: "ยกเลิก", exact: true }).click();
+    await page.getByRole("dialog").waitFor({ state: "hidden" });
+
     assert.equal(p.requests[0].payments[0].amount, "3000");
     const moneySummary = (await call("/summary?from=2026-10-01&to=2027-09-30"))
       .data;
@@ -500,12 +597,194 @@ try {
       .getByRole("button", { name: "ตั้งค่าระบบ" })
       .click();
     await page.getByLabel("ชื่อระบบ", { exact: true }).waitFor();
+    const originalConfig = (await call("/config")).data;
+    await page
+      .getByLabel("ชื่อระบบ", { exact: true })
+      .fill("ร่างการตั้งค่าที่ยังไม่บันทึก");
+    await page
+      .getByRole("navigation")
+      .getByRole("button", { name: "ตั้งค่าระบบ", exact: true })
+      .click();
+    assert.equal(await page.getByRole("dialog").count(), 0);
+    await page
+      .getByRole("navigation")
+      .getByRole("button", { name: "ทะเบียนผู้ประสบปัญหา" })
+      .click();
+    await page
+      .getByRole("dialog", { name: "ยังมีข้อมูลที่ไม่ได้บันทึก", exact: true })
+      .waitFor();
+    await page.screenshot({
+      path: "/tmp/bs-sams-navigation-guard-desktop.png",
+      fullPage: false,
+    });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.screenshot({
+      path: "/tmp/bs-sams-navigation-guard-mobile.png",
+      fullPage: false,
+    });
+    await page.setViewportSize({ width: 1536, height: 1024 });
+    await page
+      .getByRole("button", { name: "กลับไปแก้ไข", exact: true })
+      .click();
+    assert.equal(
+      await page.getByLabel("ชื่อระบบ", { exact: true }).inputValue(),
+      "ร่างการตั้งค่าที่ยังไม่บันทึก",
+    );
+    await page.getByRole("button", { name: "ออกจากระบบ", exact: true }).click();
+    await page
+      .getByRole("dialog", { name: "ยังมีข้อมูลที่ไม่ได้บันทึก", exact: true })
+      .waitFor();
+    await page
+      .getByRole("button", { name: "กลับไปแก้ไข", exact: true })
+      .click();
+    assert.equal((await call("/me")).status, 200);
+    await page
+      .getByRole("navigation")
+      .getByRole("button", { name: "ทะเบียนผู้ประสบปัญหา" })
+      .click();
+    await page
+      .getByRole("button", { name: "ละทิ้งและดำเนินการต่อ", exact: true })
+      .click();
+    await page
+      .getByRole("heading", { name: "ทะเบียนผู้ประสบปัญหา", exact: true })
+      .waitFor();
+    assert.equal((await call("/config")).data.name, originalConfig.name);
+    await page
+      .getByRole("navigation")
+      .getByRole("button", { name: "ตั้งค่าระบบ", exact: true })
+      .click();
+    await page.getByLabel("ชื่อระบบ", { exact: true }).waitFor();
+
+    const configWrites = await Promise.all([
+      call("/config", "PUT", { ...originalConfig, name: "ระบบทดสอบผู้ดูแล A" }),
+      call("/config", "PUT", { ...originalConfig, name: "ระบบทดสอบผู้ดูแล B" }),
+    ]);
+    assert.deepEqual(configWrites.map((r) => r.status).sort(), [200, 409]);
+    const winner = configWrites.find((r) => r.status === 200).data;
+    const configAudit = await call("/audit?action=update-config");
+    assert.equal(configAudit.data.total, 1);
+    await page
+      .getByRole("button", { name: "บันทึกการตั้งค่า", exact: true })
+      .click();
+    await page
+      .getByRole("alert")
+      .filter({ hasText: "มีผู้ดูแลแก้ไขการตั้งค่าแล้ว" })
+      .waitFor();
+    await page
+      .getByLabel("ชื่อระบบ", { exact: true })
+      .fill("การแก้ไขที่ต้องเก็บไว้");
+    await page
+      .getByRole("button", { name: "โหลดค่าล่าสุด", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "กลับไปแก้ไข", exact: true })
+      .click();
+    assert.equal(
+      await page.getByLabel("ชื่อระบบ", { exact: true }).inputValue(),
+      "การแก้ไขที่ต้องเก็บไว้",
+    );
+    await page
+      .getByRole("button", { name: "โหลดค่าล่าสุด", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "ละทิ้งและโหลดใหม่", exact: true })
+      .click();
+    await page.getByRole("dialog").waitFor({ state: "hidden" });
+    assert.equal(
+      await page.getByLabel("ชื่อระบบ", { exact: true }).inputValue(),
+      winner.name,
+    );
+    await page
+      .getByLabel("ชื่อระบบ", { exact: true })
+      .fill(originalConfig.name);
+
     await page
       .getByRole("button", { name: "บันทึกการตั้งค่า", exact: true })
       .click();
     await page
       .getByText("บันทึกการตั้งค่าเรียบร้อยแล้ว", { exact: true })
       .waitFor();
+    const currentConfig = (await call("/config")).data;
+    const withTypes = {
+      ...currentConfig,
+      types: currentConfig.types.map((t, i) =>
+        i === 0
+          ? { ...t, items: [" ตัวอย่าง ", "", "ตัวอย่าง", "อีกประเภท"] }
+          : t,
+      ),
+    };
+    const normalized = (await call("/config", "PUT", withTypes)).data;
+    assert.deepEqual(normalized.types[0].items, ["ตัวอย่าง", "อีกประเภท"]);
+    const inactive = (
+      await call("/config", "PUT", {
+        ...normalized,
+        villages: normalized.villages.map((v) =>
+          v.id <= 2 ? { ...v, active: false } : v,
+        ),
+      })
+    ).data;
+    assert.equal(
+      (await call("/people", "POST", { ...p, id: undefined })).status,
+      400,
+    );
+    // Per-person updates use the item route, even when keeping an inactive address.
+    const inactiveEdit = await call("/people/" + p.id, "PUT", p);
+    assert.equal(inactiveEdit.status, 200);
+    p.version = inactiveEdit.data.version;
+    assert.equal(
+      (await call("/people/" + p.id, "PUT", { ...p, village: 2 })).status,
+      400,
+    );
+    await page
+      .getByRole("button", { name: "โหลดค่าล่าสุด", exact: true })
+      .click();
+    await page.getByRole("button", { name: "หมู่บ้าน", exact: true }).click();
+    await page.screenshot({
+      path: "/tmp/bs-sams-settings-desktop.png",
+      fullPage: true,
+    });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.screenshot({
+      path: "/tmp/bs-sams-settings-mobile.png",
+      fullPage: true,
+    });
+    await page.setViewportSize({ width: 1536, height: 1024 });
+    await page
+      .getByRole("navigation")
+      .getByRole("button", { name: "ทะเบียนผู้ประสบปัญหา" })
+      .click();
+    await page
+      .getByRole("button", { name: "เพิ่มผู้ประสบปัญหา", exact: true })
+      .click();
+    assert.equal(
+      await page.getByLabel("หมู่บ้าน *", { exact: true }).inputValue(),
+      "3",
+    );
+    assert.equal(
+      await page
+        .getByLabel("หมู่บ้าน *", { exact: true })
+        .getByRole("option", { name: "หมู่ 1 บ้านทรายมูล", exact: true })
+        .count(),
+      0,
+    );
+    await page.getByRole("button", { name: "ยกเลิก", exact: true }).click();
+    assert.equal(
+      (
+        await call("/config", "PUT", {
+          ...originalConfig,
+          revision: inactive.revision,
+        })
+      ).status,
+      200,
+    );
+    await page
+      .getByRole("navigation")
+      .getByRole("button", { name: "ตั้งค่าระบบ" })
+      .click();
+    await page
+      .getByRole("button", { name: "โหลดค่าล่าสุด", exact: true })
+      .click();
+
     await page
       .getByRole("navigation")
       .getByRole("button", { name: "จัดการผู้ใช้งาน" })
@@ -514,7 +793,30 @@ try {
       .getByRole("button", { name: "เพิ่มผู้ใช้งาน", exact: true })
       .click();
     await page.getByLabel("ชื่อผู้ใช้ · a–z, 0–9, จุด, ขีด").waitFor();
+    await page
+      .getByLabel("ชื่อผู้ใช้ · a–z, 0–9, จุด, ขีด")
+      .fill("unsaved-account");
+    await page.keyboard.press("Escape");
+    await page
+      .getByRole("dialog", { name: "ยังมีข้อมูลที่ไม่ได้บันทึก", exact: true })
+      .waitFor();
+    await page
+      .getByRole("button", { name: "กลับไปแก้ไข", exact: true })
+      .click();
+    assert.equal(
+      await page.getByLabel("ชื่อผู้ใช้ · a–z, 0–9, จุด, ขีด").inputValue(),
+      "unsaved-account",
+    );
+
     await page.getByRole("button", { name: "ยกเลิก", exact: true }).click();
+    await page
+      .getByRole("button", { name: "ละทิ้งการเปลี่ยนแปลง", exact: true })
+      .click();
+    assert.equal(
+      (await call("/users")).data.some((u) => u.username === "unsaved-account"),
+      false,
+    );
+
     assert.equal(
       (await call("/people/" + p.id, "DELETE", { reason: "ทดสอบถังขยะ" }))
         .status,
@@ -523,6 +825,7 @@ try {
     assert.ok(
       (await call("/people?trash=1")).data.items.some((x) => x.id === p.id),
     );
+    assert.equal((await call("/people/" + p.id)).status, 404);
     assert.equal(
       (await call("/people/" + p.id + "/restore", "POST", {})).status,
       200,
@@ -572,6 +875,7 @@ try {
       false,
     );
     assert.equal((await staffCall("/people/" + p.id, "PUT", p)).status, 403);
+    assert.equal((await staffCall("/people/" + p.id)).status, 404);
     assert.equal(
       (await staffCall("/export", "POST", { filters: { q: p.id } })).data
         .length,
@@ -685,6 +989,77 @@ try {
     });
     await page.setViewportSize({ width: 1536, height: 1024 });
 
+    // A view-only staff member can open details but cannot edit or export.
+    const readerPass = crypto.randomUUID(),
+      readerFinal = crypto.randomUUID();
+    assert.equal(
+      (
+        await call("/users", "POST", {
+          username: "qa-reader",
+          name: "เจ้าหน้าที่อ่านอย่างเดียว",
+          role: "staff",
+          permissions: ["view"],
+          villages: [1],
+          active: true,
+          password: readerPass,
+        })
+      ).status,
+      200,
+    );
+    const reader = await browser.newContext();
+    await reader.request.post(origin + "/api/login", {
+      data: { username: "qa-reader", password: readerPass },
+    });
+    await reader.request.post(origin + "/api/password", {
+      data: { current: readerPass, password: readerFinal },
+    });
+    await reader.request.post(origin + "/api/login", {
+      data: { username: "qa-reader", password: readerFinal },
+    });
+    const readerPage = await reader.newPage();
+    await readerPage.goto(origin);
+    await readerPage
+      .getByRole("navigation")
+      .getByRole("button", { name: "ทะเบียนผู้ประสบปัญหา" })
+      .click();
+    await readerPage
+      .getByLabel("ชื่อ นามสกุล / เลขบัตร / เลขทะเบียน")
+      .fill(p.id);
+    await readerPage
+      .getByRole("button", { name: "ค้นหา", exact: true })
+      .click();
+    await readerPage
+      .getByRole("button", { name: "ดู บุคคลทดสอบ", exact: true })
+      .click();
+    const readerDetails = readerPage.getByRole("dialog", {
+      name: "รายละเอียดผู้ประสบปัญหา",
+      exact: true,
+    });
+    await readerDetails
+      .getByRole("heading", { name: "นายบุคคลทดสอบ ระบบ", exact: true })
+      .waitFor();
+    assert.equal(
+      await readerDetails
+        .getByRole("button", { name: "แก้ไขข้อมูล", exact: true })
+        .count(),
+      0,
+    );
+    assert.equal(
+      (
+        await reader.request.put(origin + "/api/people/" + p.id, { data: p })
+      ).status(),
+      403,
+    );
+    await readerDetails
+      .getByRole("button", { name: "ปิดรายละเอียด", exact: true })
+      .click();
+    assert.equal(
+      await readerPage
+        .getByRole("button", { name: "Excel", exact: true })
+        .isDisabled(),
+      true,
+    );
+    await reader.close();
     // Administrator audit queries use the same applied filters on every page.
     const auditPage = await call("/audit?action=create-person&size=10&page=2");
     assert.equal(auditPage.status, 200);
@@ -740,6 +1115,158 @@ try {
       fullPage: true,
     });
     await page.setViewportSize({ width: 1536, height: 1024 });
+    // Duplicate warnings are scoped and opening the existing record preserves the draft.
+    assert.equal(
+      (
+        await call("/people/duplicate-check", "POST", {
+          first: p.first,
+          last: p.last,
+          birth: p.birth,
+          id: p.id,
+        })
+      ).data.total,
+      0,
+    );
+    assert.equal(
+      (
+        await staffCall("/people/duplicate-check", "POST", {
+          first: p.first,
+          last: p.last,
+          birth: p.birth,
+        })
+      ).data.total,
+      0,
+    );
+    await page
+      .getByRole("navigation")
+      .getByRole("button", { name: "ทะเบียนผู้ประสบปัญหา" })
+      .click();
+    await page
+      .getByRole("button", { name: "เพิ่มผู้ประสบปัญหา", exact: true })
+      .click();
+    await page.getByLabel("ชื่อ *", { exact: true }).fill(p.first);
+    await page.getByLabel("นามสกุล *", { exact: true }).fill(p.last);
+    await page.getByLabel("วันเดือนปีเกิด").fill(p.birth);
+    await page
+      .getByRole("button", { name: "บันทึกข้อมูล", exact: true })
+      .click();
+    const duplicateDialog = () =>
+      page.getByRole("dialog", { name: "พบทะเบียนที่อาจซ้ำ", exact: true });
+    await duplicateDialog().waitFor();
+    await page.screenshot({
+      path: "/tmp/bs-sams-duplicates-desktop.png",
+      fullPage: false,
+    });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.screenshot({
+      path: "/tmp/bs-sams-duplicates-mobile.png",
+      fullPage: false,
+    });
+    await page.setViewportSize({ width: 1536, height: 1024 });
+    await duplicateDialog()
+      .getByRole("button", { name: "ดูทะเบียนเดิม", exact: true })
+      .click();
+    await page
+      .getByRole("dialog", { name: "รายละเอียดผู้ประสบปัญหา", exact: true })
+      .getByRole("heading", { name: "นายบุคคลทดสอบ ระบบ", exact: true })
+      .waitFor();
+    await page
+      .getByRole("button", { name: "ปิดรายละเอียด", exact: true })
+      .click();
+    assert.equal(
+      await page.getByLabel("ชื่อ *", { exact: true }).inputValue(),
+      p.first,
+    );
+    assert.equal(
+      (await call("/people?q=" + encodeURIComponent(p.first))).data.total,
+      1,
+    );
+    await page
+      .getByRole("button", { name: "บันทึกข้อมูล", exact: true })
+      .click();
+    await duplicateDialog()
+      .getByRole("button", { name: "กลับไปตรวจสอบ", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "บันทึกข้อมูล", exact: true })
+      .click();
+    await duplicateDialog()
+      .getByRole("button", {
+        name: "ยืนยันว่าเป็นคนละบุคคลและบันทึก",
+        exact: true,
+      })
+      .click();
+    await page
+      .getByRole("dialog", { name: "เพิ่มผู้ประสบปัญหาทางสังคม", exact: true })
+      .waitFor({ state: "hidden" });
+    await duplicateDialog().waitFor({ state: "hidden" });
+    assert.equal(
+      (await call("/people?q=" + encodeURIComponent(p.first))).data.total,
+      2,
+    );
+    const prefix = "123456789012";
+    const checksum =
+      (11 -
+        ([...prefix].reduce((sum, d, i) => sum + Number(d) * (13 - i), 0) %
+          11)) %
+      10;
+    const testNationalId = prefix + checksum;
+    assert.equal(
+      (
+        await call("/people", "POST", {
+          ...p,
+          id: undefined,
+          nationalId: testNationalId,
+          first: "ทะเบียนเลขบัตรทดสอบ",
+          last: "ระบบ",
+          requests: [],
+        })
+      ).status,
+      201,
+    );
+    await page
+      .getByRole("button", { name: "เพิ่มผู้ประสบปัญหา", exact: true })
+      .click();
+    await page.getByLabel("ชื่อ *", { exact: true }).fill("ชื่อใหม่ทดสอบ");
+    await page.getByLabel("นามสกุล *", { exact: true }).fill("ระบบ");
+    await page
+      .getByLabel("เลขบัตรประชาชน · ไม่บังคับ", { exact: true })
+      .fill(testNationalId);
+    await page
+      .getByRole("button", { name: "บันทึกข้อมูล", exact: true })
+      .click();
+    await duplicateDialog()
+      .getByText("หมู่ 1 · เลขบัตรประชาชนตรงกัน", { exact: true })
+      .waitFor();
+    assert.equal(
+      await duplicateDialog()
+        .getByRole("button", {
+          name: "ยืนยันว่าเป็นคนละบุคคลและบันทึก",
+          exact: true,
+        })
+        .count(),
+      0,
+    );
+    assert.equal(
+      (
+        await call("/people", "POST", {
+          ...p,
+          id: undefined,
+          nationalId: testNationalId,
+          first: "ทดสอบเลขบัตรซ้ำ",
+          requests: [],
+        })
+      ).status,
+      409,
+    );
+
+    await duplicateDialog()
+      .getByRole("button", { name: "กลับไปตรวจสอบ", exact: true })
+      .click();
+    await page.getByRole("button", { name: "ยกเลิก", exact: true }).click();
+    await page
+      .getByRole("button", { name: "ละทิ้งการเปลี่ยนแปลง", exact: true })
+      .click();
     // Password reset is a separate administrator operation and revokes existing sessions.
     const tempPassword = crypto.randomUUID(),
       finalStaffPassword = crypto.randomUUID();
@@ -986,9 +1513,36 @@ try {
       200,
     );
     await otherDevice.close();
+    // Confirming logout from a dirty settings form actually ends the session.
+    await page.getByLabel("ชื่อผู้ใช้", { exact: true }).fill("qa-admin");
+    await page.getByLabel("รหัสผ่าน", { exact: true }).fill(rotated);
+    await page
+      .getByRole("button", { name: "เข้าสู่ระบบ", exact: true })
+      .click();
+    await page
+      .getByRole("heading", { name: "ภาพรวมการช่วยเหลือ", exact: true })
+      .waitFor();
+    await page.getByRole("button", { name: "เปิดเมนู", exact: true }).click();
+    await page
+      .getByRole("navigation")
+      .getByRole("button", { name: "ตั้งค่าระบบ", exact: true })
+      .click();
+    await page
+      .getByLabel("ชื่อระบบ", { exact: true })
+      .fill("ร่างก่อนออกจากระบบ");
+    await page.getByRole("button", { name: "เปิดเมนู", exact: true }).click();
+    await page.getByRole("button", { name: "ออกจากระบบ", exact: true }).click();
+    await page
+      .getByRole("button", { name: "ละทิ้งและดำเนินการต่อ", exact: true })
+      .click();
+    await page
+      .getByRole("heading", { name: "เข้าสู่ระบบ", exact: true })
+      .waitFor();
+    assert.equal((await call("/me")).status, 401);
+
     assert.deepEqual(errors, []);
     console.log(
-      "PASS: isolated Worker/D1, login, forced and self-service password changes, all-device session revocation, server-side filters/pagination and full filtered Excel export, person/request/payment form with unsaved-change confirmation and draft removal, saved-history protection, exact satang totals and numeric Excel cells, admin password reset and account deactivation/reactivation, paginated Thai audit filters and admin-only access, optimistic locking with accurate audit, mixed request statuses, Excel download, trash/restore, staff authorization, desktop/mobile layout, console health",
+      "PASS: isolated Worker/D1, login, forced and self-service password changes, all-device session revocation, server-side filters/pagination and full filtered Excel export, person/request/payment form with unsaved-change confirmation and draft removal, saved-history protection, unsaved settings navigation/logout and account close confirmations, scoped duplicate warnings with preserved draft previews, advanced age/disability/request-date filters, minimal registry data and fresh authorized person details, exact satang totals and numeric Excel cells, admin password reset and account deactivation/reactivation, paginated Thai audit filters and admin-only access, optimistic locking with accurate audit, mixed request statuses, Excel download, trash/restore, staff authorization, desktop/mobile layout, console health",
     );
   } finally {
     await browser.close();

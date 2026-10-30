@@ -1,3 +1,4 @@
+import { PersonDetails } from "./person-details";
 import React, { useEffect, useState, useRef } from "react";
 import {
   Plus,
@@ -70,13 +71,18 @@ export function Registry({ user, config, refresh }) {
     [village, setVillage] = useState(""),
     [status, setStatus] = useState(""),
     [cat, setCat] = useState(""),
+    [ageGroup, setAgeGroup] = useState(""),
+    [disability, setDisability] = useState(""),
+    [requestType, setRequestType] = useState(""),
+    [requestFrom, setRequestFrom] = useState(""),
+    [requestTo, setRequestTo] = useState(""),
     [filters, setFilters] = useState({}),
     [page, setPage] = useState(1),
     [size, setSize] = useState(10),
     [sort, setSort] = useState("name"),
     [ascending, setAscending] = useState(true),
     [editor, setEditor] = useState(null),
-    [readonly, setReadonly] = useState(false),
+    [selection, setSelection] = useState(null),
     [deleting, setDeleting] = useState(null),
     [busy, setBusy] = useState(false);
   const requestVersion = useRef(0);
@@ -133,6 +139,11 @@ export function Registry({ user, config, refresh }) {
     setVillage("");
     setStatus("");
     setCat("");
+    setAgeGroup("");
+    setDisability("");
+    setRequestType("");
+    setRequestFrom("");
+    setRequestTo("");
     setFilters({});
     setPage(1);
   }
@@ -237,11 +248,23 @@ export function Registry({ user, config, refresh }) {
                   user.villages.length > 0)) && (
                 <button
                   className="primary"
+                  disabled={
+                    !config.villages.some(
+                      (v) =>
+                        v.active &&
+                        can(user, "create", v.id) &&
+                        can(user, "view", v.id),
+                    )
+                  }
                   onClick={() => {
-                    setReadonly(false);
                     setEditor({
                       ...initial(),
-                      village: user.role === "admin" ? 1 : user.villages[0],
+                      village: config.villages.find(
+                        (v) =>
+                          v.active &&
+                          can(user, "create", v.id) &&
+                          can(user, "view", v.id),
+                      )?.id,
                     });
                   }}
                 >
@@ -258,7 +281,17 @@ export function Registry({ user, config, refresh }) {
           className="panel filters"
           onSubmit={(e) => {
             e.preventDefault();
-            setFilters({ q, village, status, cat });
+            setFilters({
+              q,
+              village,
+              status,
+              cat,
+              ageGroup,
+              disability,
+              requestType,
+              requestFrom,
+              requestTo,
+            });
             setPage(1);
           }}
         >
@@ -289,7 +322,10 @@ export function Registry({ user, config, refresh }) {
           <Select
             label="ประเภทความช่วยเหลือ"
             value={cat}
-            onChange={(e) => setCat(e.target.value)}
+            onChange={(e) => {
+              setCat(e.target.value);
+              setRequestType("");
+            }}
           >
             <option value="">ทั้งหมด</option>
             {categories.map((c, i) => (
@@ -310,6 +346,77 @@ export function Registry({ user, config, refresh }) {
               </option>
             ))}
           </Select>
+          <details className="advanced-filters">
+            <summary>ตัวกรองเพิ่มเติม</summary>
+            <Select
+              label="ช่วงวัย"
+              value={ageGroup}
+              onChange={(e) => setAgeGroup(e.target.value)}
+            >
+              {[
+                ["", "ทุกช่วงวัย"],
+                ["child", "เด็ก · 0–17 ปี"],
+                ["youth", "เยาวชน · 18–25 ปี"],
+                ["adult", "วัยทำงาน · 26–59 ปี"],
+                ["senior", "ผู้สูงอายุ · 60 ปีขึ้นไป"],
+                ["unknown", "ไม่ระบุวันเกิด"],
+              ].map(([v, l]) => (
+                <option key={v} value={v}>
+                  {l}
+                </option>
+              ))}
+            </Select>
+            <Select
+              label="ประเภทความพิการ"
+              value={disability}
+              onChange={(e) => setDisability(e.target.value)}
+            >
+              <option value="">ทั้งหมด</option>
+              <option value="none">ไม่มีความพิการ</option>
+              {disabilities.map((d, i) => (
+                <option key={d} value={String(i)}>
+                  {d}
+                </option>
+              ))}
+            </Select>
+            <Field label="ประเภทความช่วยเหลือย่อย">
+              <input
+                list="filter-request-types"
+                value={requestType}
+                maxLength={300}
+                onChange={(e) => setRequestType(e.target.value)}
+                placeholder="เลือกหรือพิมพ์ชื่อประเภทเดิม"
+              />
+              <datalist id="filter-request-types">
+                {[
+                  ...new Set(
+                    config.types
+                      .filter((t) => !cat || t.id === cat)
+                      .flatMap((t) => t.items),
+                  ),
+                ].map((t) => (
+                  <option key={t} value={t} />
+                ))}
+              </datalist>
+            </Field>
+            <Field
+              label="ยื่นคำขอตั้งแต่วันที่"
+              type="date"
+              value={requestFrom}
+              max={requestTo || undefined}
+              onChange={(e) => setRequestFrom(e.target.value)}
+            />
+            <Field
+              label="ยื่นคำขอถึงวันที่"
+              type="date"
+              value={requestTo}
+              min={requestFrom || undefined}
+              onChange={(e) => setRequestTo(e.target.value)}
+            />
+            <p className="small muted">
+              หมวดหมู่ ประเภทย่อย และวันที่ต้องตรงกับคำขอเดียวกัน
+            </p>
+          </details>
           <div className="filter-actions">
             <button type="button" onClick={clear}>
               ล้างตัวกรอง
@@ -335,6 +442,9 @@ export function Registry({ user, config, refresh }) {
             <h2>{trash ? "ข้อมูลในถังขยะ" : "รายการผู้ประสบปัญหา"}</h2>
             <span className="small muted">
               {total.toLocaleString("th-TH")} รายการ
+              {Object.values(filters).some(Boolean) && (
+                <> · {Object.values(filters).filter(Boolean).length} ตัวกรอง</>
+              )}
             </span>
           </div>
           <ErrorBox error={error} />
@@ -373,8 +483,8 @@ export function Registry({ user, config, refresh }) {
                 {visible.map((p) => (
                   <tr key={p.id}>
                     <td>
-                      <span className={"badge " + personStatus(p)}>
-                        {personLabels[personStatus(p)]}
+                      <span className={"badge " + p.status}>
+                        {personLabels[p.status]}
                       </span>
                       {trash && (
                         <small className="block muted">
@@ -390,7 +500,7 @@ export function Registry({ user, config, refresh }) {
                         {p.first} {p.last}
                       </strong>
                       <small className="block muted">
-                        อายุ {age(p.birth) ?? "ไม่ระบุ"} ปี
+                        อายุ {p.age ?? "ไม่ระบุ"} ปี
                       </small>
                     </td>
                     <td>
@@ -404,10 +514,7 @@ export function Registry({ user, config, refresh }) {
                       <div className="category-icons">
                         {categories.map((c, i) => {
                           const Icon = icons[i];
-                          const rs = p.requests.filter(
-                            (r) => Number(r.category) === i,
-                          );
-                          const s = personStatus({ requests: rs });
+                          const s = p.categoryStatuses[i];
                           return (
                             <span
                               key={c}
@@ -453,8 +560,7 @@ export function Registry({ user, config, refresh }) {
                               className="icon"
                               aria-label={`ดู ${p.first}`}
                               onClick={() => {
-                                setReadonly(true);
-                                setEditor(p);
+                                setSelection({ id: p.id, mode: "view" });
                               }}
                             >
                               <Eye size={17} />
@@ -464,8 +570,7 @@ export function Registry({ user, config, refresh }) {
                                 className="icon"
                                 aria-label={`แก้ไข ${p.first}`}
                                 onClick={() => {
-                                  setReadonly(false);
-                                  setEditor(p);
+                                  setSelection({ id: p.id, mode: "edit" });
                                 }}
                               >
                                 <Pencil size={17} />
@@ -557,12 +662,25 @@ export function Registry({ user, config, refresh }) {
       {editor && (
         <PersonEditor
           person={editor}
-          readonly={readonly}
           config={config}
           user={user}
           onClose={() => setEditor(null)}
           onSaved={() => {
             setEditor(null);
+            load();
+            refresh();
+          }}
+        />
+      )}
+      {selection && (
+        <RecordDialog
+          selection={selection}
+          config={config}
+          user={user}
+          onClose={() => setSelection(null)}
+          onEdit={() => setSelection({ ...selection, mode: "edit" })}
+          onSaved={() => {
+            setSelection(null);
             load();
             refresh();
           }}
@@ -609,14 +727,16 @@ export function Registry({ user, config, refresh }) {
     </>
   );
 }
-function PersonEditor({ person, readonly, config, user, onClose, onSaved }) {
+function PersonEditor({ person, config, user, onClose, onSaved }) {
   const [p, setP] = useState(() => structuredClone(person)),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
   const [confirm, setConfirm] = useState(null);
+  const [duplicates, setDuplicates] = useState(null),
+    [existingId, setExistingId] = useState(null);
   const original = useRef(JSON.stringify(person));
   const errorRef = useRef(null);
-  const dirty = !readonly && JSON.stringify(p) !== original.current;
+  const dirty = JSON.stringify(p) !== original.current;
   useUnsavedChanges(dirty);
   useEffect(() => {
     if (error) {
@@ -659,6 +779,19 @@ function PersonEditor({ person, readonly, config, user, onClose, onSaved }) {
       "requests",
       p.requests.map((r) => (r.id === id ? { ...r, [key]: val } : r)),
     );
+  async function persist() {
+    setBusy(true);
+    setError("");
+    try {
+      await api(p.id ? "/people/" + p.id : "/people", p.id ? "PUT" : "POST", p);
+      onSaved();
+    } catch (e) {
+      setError(e.message);
+      setDuplicates(null);
+    } finally {
+      setBusy(false);
+    }
+  }
   async function save(e) {
     e.preventDefault();
     setError("");
@@ -667,15 +800,34 @@ function PersonEditor({ person, readonly, config, user, onClose, onSaved }) {
       setError(err);
       return;
     }
-    setBusy(true);
-    try {
-      await api(p.id ? "/people/" + p.id : "/people", p.id ? "PUT" : "POST", p);
-      onSaved();
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setBusy(false);
+    const fields = ["first", "last", "birth", "phone", "nationalId"];
+    if (
+      !p.id ||
+      fields.some((key) => (p[key] || "").trim() !== (person[key] || "").trim())
+    ) {
+      setBusy(true);
+      try {
+        const result = await api(
+          "/people/duplicate-check",
+          "POST",
+          Object.fromEntries(
+            [...fields, "id"]
+              .filter((key) => p[key] !== undefined)
+              .map((key) => [key, p[key] ?? ""]),
+          ),
+        );
+        if (result.total) {
+          setDuplicates(result);
+          setBusy(false);
+          return;
+        }
+      } catch (e) {
+        setError(e.message);
+        setBusy(false);
+        return;
+      }
     }
+    await persist();
   }
   const input = (label, key, type = "text", required = false) => (
     <Field
@@ -692,11 +844,7 @@ function PersonEditor({ person, readonly, config, user, onClose, onSaved }) {
     <>
       <Modal
         title={
-          readonly
-            ? "รายละเอียดผู้ประสบปัญหา"
-            : p.id
-              ? "แก้ไขทะเบียนผู้ประสบปัญหา"
-              : "เพิ่มผู้ประสบปัญหาทางสังคม"
+          p.id ? "แก้ไขทะเบียนผู้ประสบปัญหา" : "เพิ่มผู้ประสบปัญหาทางสังคม"
         }
         onClose={requestClose}
         closeDisabled={busy}
@@ -706,7 +854,7 @@ function PersonEditor({ person, readonly, config, user, onClose, onSaved }) {
           <div ref={errorRef} tabIndex={-1}>
             <ErrorBox error={error} />
           </div>
-          <fieldset disabled={readonly || busy}>
+          <fieldset disabled={busy}>
             <h3 className="section-title">ข้อมูลส่วนบุคคล</h3>
             <div className="form-grid">
               {input("เลขบัตรประชาชน · ไม่บังคับ", "nationalId")}
@@ -791,7 +939,7 @@ function PersonEditor({ person, readonly, config, user, onClose, onSaved }) {
                 {config.villages
                   .filter(
                     (v) =>
-                      v.id === p.village ||
+                      (p.id && v.id === p.village) ||
                       (v.active &&
                         can(user, p.id ? "edit" : "create", v.id) &&
                         can(user, "view", v.id)),
@@ -805,7 +953,7 @@ function PersonEditor({ person, readonly, config, user, onClose, onSaved }) {
             </div>
             <div className="panel-title section-title">
               <h3>สรุปสภาพปัญหาและคำขอรับความช่วยเหลือ</h3>
-              {!readonly && (
+              {
                 <button
                   type="button"
                   onClick={() =>
@@ -827,7 +975,7 @@ function PersonEditor({ person, readonly, config, user, onClose, onSaved }) {
                   <Plus size={16} />
                   เพิ่มคำขอ
                 </button>
-              )}
+              }
             </div>
             {!p.requests.length && (
               <p className="muted">ยังไม่มีคำขอรับความช่วยเหลือ</p>
@@ -873,7 +1021,7 @@ function PersonEditor({ person, readonly, config, user, onClose, onSaved }) {
                     <span className={"badge " + r.status}>
                       {statuses[r.status]}
                     </span>
-                    {!readonly && !savedRequests.has(r.id) && (
+                    {!savedRequests.has(r.id) && (
                       <button
                         type="button"
                         className="danger"
@@ -977,7 +1125,7 @@ function PersonEditor({ person, readonly, config, user, onClose, onSaved }) {
                     <div className="payment" key={x.id}>
                       <div className="panel-title">
                         <strong>ครั้งที่ {i + 1}</strong>
-                        {!readonly && !savedPayments.has(x.id) && (
+                        {!savedPayments.has(x.id) && (
                           <button
                             type="button"
                             className="danger"
@@ -1063,7 +1211,7 @@ function PersonEditor({ person, readonly, config, user, onClose, onSaved }) {
                       </Field>
                     </div>
                   ))}
-                  {!readonly && (
+                  {
                     <button
                       type="button"
                       onClick={() =>
@@ -1084,23 +1232,96 @@ function PersonEditor({ person, readonly, config, user, onClose, onSaved }) {
                       <Plus size={16} />
                       บันทึกการช่วยเหลือ
                     </button>
-                  )}
+                  }
                 </details>
               </section>
             ))}
           </fieldset>
           <div className="modal-actions">
             <button type="button" disabled={busy} onClick={requestClose}>
-              {readonly ? "ปิด" : "ยกเลิก"}
+              ยกเลิก
             </button>
-            {!readonly && (
+            {
               <button className="primary" disabled={busy}>
                 {busy ? "กำลังบันทึก…" : "บันทึกข้อมูล"}
               </button>
-            )}
+            }
           </div>
         </form>
       </Modal>
+      {duplicates && (
+        <Modal
+          title="พบทะเบียนที่อาจซ้ำ"
+          closeDisabled={busy}
+          onClose={() => !busy && setDuplicates(null)}
+        >
+          <p className="notice">
+            พบข้อมูลตรงกันในทะเบียนที่คุณมีสิทธิ์ดู กรุณาตรวจสอบก่อนบันทึก
+          </p>
+          <div className="duplicate-list">
+            {duplicates.items.map((item) => (
+              <article key={item.id}>
+                <strong>
+                  {item.title}
+                  {item.first} {item.last}
+                </strong>
+                <p>
+                  หมู่ {item.village} ·{" "}
+                  {item.matchReason === "nationalId"
+                    ? "เลขบัตรประชาชนตรงกัน"
+                    : item.matchReason === "birth"
+                      ? "ชื่อและวันเกิดตรงกัน"
+                      : "ชื่อและเบอร์โทรตรงกัน"}
+                </p>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => {
+                    setDuplicates(null);
+                    setExistingId(item.id);
+                  }}
+                >
+                  ดูทะเบียนเดิม
+                </button>
+              </article>
+            ))}
+          </div>
+          {duplicates.total > duplicates.items.length && (
+            <p className="small muted">
+              พบทั้งหมด {duplicates.total} รายการ แสดง 5 รายการแรก
+            </p>
+          )}
+          <div className="modal-actions">
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => setDuplicates(null)}
+            >
+              กลับไปตรวจสอบ
+            </button>
+            {!duplicates.items.some(
+              (item) => item.matchReason === "nationalId",
+            ) && (
+              <button
+                type="button"
+                className="primary"
+                disabled={busy}
+                onClick={persist}
+              >
+                {busy ? "กำลังบันทึก…" : "ยืนยันว่าเป็นคนละบุคคลและบันทึก"}
+              </button>
+            )}
+          </div>
+        </Modal>
+      )}
+      {existingId && (
+        <RecordDialog
+          selection={{ id: existingId, mode: "view" }}
+          config={config}
+          user={user}
+          onClose={() => setExistingId(null)}
+        />
+      )}
       {confirm && (
         <ConfirmDialog
           title={
@@ -1121,5 +1342,57 @@ function PersonEditor({ person, readonly, config, user, onClose, onSaved }) {
         />
       )}
     </>
+  );
+}
+
+function RecordDialog({ selection, config, user, onClose, onSaved, onEdit }) {
+  const [result, setResult] = useState(null),
+    [error, setError] = useState("");
+  const key = selection.id + ":" + selection.mode;
+  useEffect(() => {
+    const controller = new AbortController();
+    setResult(null);
+    setError("");
+    api("/people/" + selection.id, "GET", undefined, {
+      signal: controller.signal,
+    })
+      .then((data) => {
+        if (!controller.signal.aborted) setResult({ key, data });
+      })
+      .catch((e) => {
+        if (e.name !== "AbortError") setError(e.message);
+      });
+    return () => controller.abort();
+  }, [key]);
+  if (error)
+    return (
+      <Modal title="ไม่สามารถเปิดทะเบียน" onClose={onClose}>
+        <ErrorBox error={error} />
+        <div className="modal-actions">
+          <button onClick={onClose}>ปิด</button>
+        </div>
+      </Modal>
+    );
+  if (!result || result.key !== key)
+    return (
+      <Modal title="กำลังโหลดทะเบียน" onClose={onClose}>
+        <p role="status">กำลังตรวจสอบสิทธิ์และโหลดข้อมูลล่าสุด…</p>
+      </Modal>
+    );
+  return selection.mode === "edit" ? (
+    <PersonEditor
+      person={result.data}
+      config={config}
+      user={user}
+      onClose={onClose}
+      onSaved={onSaved}
+    />
+  ) : (
+    <PersonDetails
+      person={result.data}
+      config={config}
+      onClose={onClose}
+      onEdit={can(user, "edit", result.data.village) ? onEdit : undefined}
+    />
   );
 }

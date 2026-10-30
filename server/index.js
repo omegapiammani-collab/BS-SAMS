@@ -1,3 +1,5 @@
+import { findDuplicates } from "./duplicates.js";
+import { cleanConfig } from "./config.js";
 import { validateAccount, validPassword } from "./accounts.js";
 import { listAudit } from "./audit.js";
 import {
@@ -40,7 +42,9 @@ async function config(db) {
   const row = await db
     .prepare("SELECT data FROM config WHERE id='system'")
     .first();
-  return row ? JSON.parse(row.data) : structuredClone(defaultConfig);
+  return row
+    ? { ...JSON.parse(row.data), revision: JSON.parse(row.data).revision ?? 0 }
+    : { ...structuredClone(defaultConfig), revision: 0 };
 }
 export default {
   async fetch(request, env) {
@@ -152,44 +156,28 @@ export default {
         if (method === "GET") return json(await config(db));
         if (method === "PUT" && u.role === "admin") {
           const b = await request.json();
-          if (
-            !b.name?.trim() ||
-            !Array.isArray(b.villages) ||
-            !b.villages.length ||
-            !Array.isArray(b.types) ||
-            b.types.length !== 7
-          )
-            return fail("การตั้งค่าไม่ถูกต้อง");
-          if (
-            new Set(b.villages.map((v) => v.id)).size !== b.villages.length ||
-            b.villages.some((v) => !Number.isInteger(v.id) || !v.name?.trim())
-          )
-            return fail("ข้อมูลหมู่บ้านไม่ถูกต้อง");
-          if (
-            b.name.length > 200 ||
-            b.types.some(
-              (t, i) =>
-                t.id !== String(i) ||
-                !Array.isArray(t.items) ||
-                t.items.length > 100 ||
-                t.items.some((x) => typeof x !== "string" || x.length > 300),
-            ) ||
-            b.villages.some((v) => typeof v.active !== "boolean") ||
-            typeof b.logo !== "string" ||
-            b.logo.length > 280000
-          )
-            return fail("การตั้งค่าไม่ถูกต้อง");
-          if (b.logo && !/^data:image\/(png|jpeg|webp);base64,/.test(b.logo))
-            return fail("โลโก้ต้องเป็น PNG, JPEG หรือ WebP");
-          await db.batch([
+          const current = await config(db);
+          const parsed = cleanConfig(b, current);
+          if (parsed.error) return fail(parsed.error);
+          if (b.revision !== current.revision)
+            return fail(
+              "มีผู้ดูแลแก้ไขการตั้งค่าแล้ว กรุณาโหลดค่าล่าสุดก่อนบันทึก",
+              409,
+            );
+          const result = await db.batch([
             db
               .prepare(
-                "INSERT INTO config VALUES('system',?) ON CONFLICT(id) DO UPDATE SET data=excluded.data",
+                "INSERT INTO config(id,data) VALUES('system',?) ON CONFLICT(id) DO UPDATE SET data=excluded.data WHERE COALESCE(json_extract(config.data,'$.revision'),0)=?",
               )
-              .bind(JSON.stringify(b)),
-            audit(db, u, "update-config", "system"),
+              .bind(JSON.stringify(parsed.value), b.revision),
+            audit(db, u, "update-config", "system", true),
           ]);
-          return json(b);
+          if (!result[0].meta.changes)
+            return fail(
+              "มีผู้ดูแลแก้ไขการตั้งค่าแล้ว กรุณาโหลดค่าล่าสุดก่อนบันทึก",
+              409,
+            );
+          return json(parsed.value);
         }
         return fail("ไม่มีสิทธิ์", 403);
       }
@@ -251,12 +239,20 @@ export default {
         await audit(db, u, "export", "people").run();
         return json(list);
       }
+      if (path === "/api/people/duplicate-check" && method === "POST")
+        return json(await findDuplicates(db, u, await request.json()));
       if (path === "/api/people" && method === "POST") {
         const p = await request.json(),
           cfg = await config(db);
+        if (!p || typeof p !== "object" || Array.isArray(p))
+          return fail("ข้อมูลบุคคลไม่ถูกต้อง");
         p.village = Number(p.village);
         const err = validatePerson(p, cfg);
         if (err) return fail(err);
+        if (!cfg.villages.some((v) => v.id === p.village && v.active))
+          return fail(
+            "หมู่บ้านนี้ปิดใช้งานแล้ว กรุณาเลือกหมู่บ้านที่เปิดใช้งาน",
+          );
         if (!allowed(u, "create", p.village) || !allowed(u, "view", p.village))
           return fail("ไม่มีสิทธิ์ในหมู่บ้านนี้", 403);
         const id = crypto.randomUUID();
@@ -297,9 +293,16 @@ export default {
           ]);
           return json({ ok: true });
         }
+        if (method === "GET" && !match[2]) {
+          if (stored.deleted_at || !allowed(u, "view", stored.village))
+            return fail("ไม่พบข้อมูล", 404);
+          return json(personFromRow(stored));
+        }
         if (stored.deleted_at) return fail("ข้อมูลอยู่ในถังขยะ", 404);
         if (method === "PUT") {
           const p = await request.json();
+          if (!p || typeof p !== "object" || Array.isArray(p))
+            return fail("ข้อมูลบุคคลไม่ถูกต้อง");
           p.village = Number(p.village);
           if (
             !allowed(u, "view", stored.village) ||
@@ -308,8 +311,14 @@ export default {
             !allowed(u, "view", p.village)
           )
             return fail("ไม่มีสิทธิ์", 403);
-          const err = validatePerson(p, await config(db));
+          const settings = await config(db);
+          const err = validatePerson(p, settings);
           if (err) return fail(err);
+          if (
+            p.village !== stored.village &&
+            !settings.villages.some((v) => v.id === p.village && v.active)
+          )
+            return fail("ไม่สามารถย้ายทะเบียนเข้าหมู่บ้านที่ปิดใช้งาน");
           if (p.version !== stored.version)
             return fail("มีผู้แก้ไขข้อมูลแล้ว กรุณาโหลดใหม่", 409);
           const historyError = validatePersonUpdate(p, old);
@@ -448,6 +457,13 @@ export default {
       return fail("ไม่พบเส้นทางหรือไม่มีสิทธิ์", 404);
     } catch (e) {
       if (e instanceof QueryError) return fail(e.message);
+      if (String(e).includes("people.national_id"))
+        return fail(
+          "เลขบัตรประชาชนนี้มีทะเบียนแล้ว กรุณาตรวจสอบทะเบียนเดิมหรือติดต่อผู้ดูแลระบบ",
+          409,
+        );
+      if (String(e).includes("users.username"))
+        return fail("ชื่อผู้ใช้นี้มีอยู่แล้ว", 409);
       if (String(e).includes("UNIQUE constraint"))
         return fail("เลขบัตรประชาชนหรือชื่อผู้ใช้ซ้ำ", 409);
       console.error("API failure", e.name);

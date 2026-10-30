@@ -1,4 +1,13 @@
-import { personLabels, closed } from "../src/domain.js";
+import { thailandDate } from "../src/money.js";
+import {
+  personLabels,
+  closed,
+  personStatus,
+  categories,
+  age,
+  isDate,
+  disabilities,
+} from "../src/domain.js";
 
 export class QueryError extends Error {}
 export function parsePeopleQuery(params) {
@@ -15,6 +24,12 @@ export function parsePeopleQuery(params) {
     village: integer("village", null, 10000),
     status: get("status"),
     cat: get("cat"),
+    ageGroup: get("ageGroup"),
+    disability: get("disability"),
+    requestType: get("requestType").trim(),
+    requestFrom: get("requestFrom"),
+    requestTo: get("requestTo"),
+    asOf: thailandDate(),
     page: integer("page", 1, 1000000),
     size: integer("size", 10, 100),
     sort: get("sort") || "name",
@@ -29,6 +44,25 @@ export function parsePeopleQuery(params) {
     !["asc", "desc"].includes(query.direction)
   )
     throw new QueryError("เงื่อนไขการค้นหาไม่ถูกต้อง");
+  if (
+    (query.ageGroup &&
+      !["child", "youth", "adult", "senior", "unknown"].includes(
+        query.ageGroup,
+      )) ||
+    (query.disability &&
+      query.disability !== "none" &&
+      !/^[0-6]$/.test(query.disability)) ||
+    query.requestType.length > 300
+  )
+    throw new QueryError("ตัวกรองช่วงวัย ความพิการ หรือประเภทไม่ถูกต้อง");
+  if (
+    (query.requestFrom && !isDate(query.requestFrom)) ||
+    (query.requestTo && !isDate(query.requestTo)) ||
+    (query.requestFrom &&
+      query.requestTo &&
+      query.requestFrom > query.requestTo)
+  )
+    throw new QueryError("ช่วงวันที่ยื่นคำขอไม่ถูกต้อง");
   return query;
 }
 // Keep the SQL classification equivalent to personStatus; parity is tested using SQLite.
@@ -50,8 +84,8 @@ export function peopleSelection(user, query, exporting = false) {
     )
       where.push("0");
     else {
-      where.push(`village IN (${user.villages.map(() => "?").join(",")})`);
-      args.push(...user.villages);
+      where.push("village IN (SELECT value FROM json_each(?))");
+      args.push(JSON.stringify(user.villages));
     }
   }
   if (query.village) {
@@ -68,11 +102,50 @@ export function peopleSelection(user, query, exporting = false) {
     where.push(`(${statusSql})=?`);
     args.push(query.status);
   }
+  const requests = [];
   if (query.cat) {
-    where.push(
-      "EXISTS(SELECT 1 FROM json_each(data,'$.requests') r WHERE CAST(json_extract(r.value,'$.category') AS TEXT)=?)",
-    );
+    requests.push("CAST(json_extract(r.value,'$.category') AS TEXT)=?");
     args.push(query.cat);
+  }
+  if (query.requestType) {
+    requests.push("json_extract(r.value,'$.type')=?");
+    args.push(query.requestType);
+  }
+  if (query.requestFrom) {
+    requests.push("json_extract(r.value,'$.date')>=?");
+    args.push(query.requestFrom);
+  }
+  if (query.requestTo) {
+    requests.push("json_extract(r.value,'$.date')<=?");
+    args.push(query.requestTo);
+  }
+  if (requests.length)
+    where.push(
+      `EXISTS(SELECT 1 FROM json_each(data,'$.requests') r WHERE ${requests.join(" AND ")})`,
+    );
+  if (query.disability === "none")
+    where.push("COALESCE(json_array_length(data,'$.disabilities'),0)=0");
+  else if (query.disability) {
+    where.push(
+      "EXISTS(SELECT 1 FROM json_each(data,'$.disabilities') d WHERE d.value=?)",
+    );
+    args.push(disabilities[Number(query.disability)]);
+  }
+  if (query.ageGroup === "unknown")
+    where.push(
+      "(json_extract(data,'$.birth') IS NULL OR json_extract(data,'$.birth')='')",
+    );
+  else if (query.ageGroup) {
+    const limits = {
+      child: [0, 17],
+      youth: [18, 25],
+      adult: [26, 59],
+      senior: [60, 9999],
+    }[query.ageGroup];
+    where.push(
+      "(CAST(strftime('%Y',?) AS INTEGER)-CAST(strftime('%Y',json_extract(data,'$.birth')) AS INTEGER)-(strftime('%m-%d',?)<strftime('%m-%d',json_extract(data,'$.birth')))) BETWEEN ? AND ?",
+    );
+    args.push(query.asOf, query.asOf, ...limits);
   }
   const direction = query.direction === "desc" ? "DESC" : "ASC";
   const name = "json_extract(data,'$.first')||' '||json_extract(data,'$.last')";
@@ -92,6 +165,30 @@ export function personFromRow(p) {
     deleteReason: p.delete_reason,
   };
 }
+export function personListItem(row) {
+  const p = JSON.parse(row.data);
+  return {
+    id: row.id,
+    title: p.title,
+    first: p.first,
+    last: p.last,
+    age: age(p.birth, thailandDate()),
+    village: row.village,
+    status: personStatus(p),
+    categoryStatuses: categories.map((_, i) =>
+      personStatus({
+        requests: p.requests.filter((r) => Number(r.category) === i),
+      }),
+    ),
+    ...(row.deleted_at
+      ? {
+          deletedAt: row.deleted_at,
+          deletedBy: row.deleted_by,
+          deleteReason: row.delete_reason,
+        }
+      : {}),
+  };
+}
 export async function listPeople(db, user, query) {
   const selection = peopleSelection(user, query);
   const count = db
@@ -104,7 +201,7 @@ export async function listPeople(db, user, query) {
     .bind(...selection.args, query.size, (query.page - 1) * query.size);
   const [total, items] = await db.batch([count, rows]);
   return {
-    items: items.results.map(personFromRow),
+    items: items.results.map(personListItem),
     total: total.results[0].total,
     page: query.page,
     size: query.size,
