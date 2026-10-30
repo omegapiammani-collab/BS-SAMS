@@ -301,7 +301,7 @@ function App() {
                 }}
               >
                 <Icon size={20} />
-                {label}
+                <span className="nav-label">{label}</span>
                 {page === id && <ChevronRight size={15} />}
               </button>
             ))}
