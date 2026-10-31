@@ -1,6 +1,4 @@
 import test from "node:test";
-import { DatabaseSync } from "node:sqlite";
-import { readFileSync } from "node:fs";
 import assert from "node:assert/strict";
 import { validateAccount, validPassword } from "../server/accounts.js";
 import { defaultConfig } from "../src/domain.js";
@@ -11,8 +9,7 @@ const account = () => ({
   permissions: ["view", "edit"],
   villages: [1],
   active: true,
-  version: 1,
-  password: "temporary-password",
+  password: "Temporary-password1!",
 });
 test("account validation rejects malformed values and unknown assignments", () => {
   for (const bad of [
@@ -56,39 +53,27 @@ test("password resets are separate from account edits", () => {
   assert.equal(validateAccount(a, defaultConfig, false), null);
   for (const p of [null, {}, 123, "short", "a".repeat(129)])
     assert.equal(validPassword(p), false);
-  assert.equal(validPassword("a".repeat(12)), true);
-});
-
-test("editing an account requires a valid version", () => {
-  const a = account();
-  delete a.password;
-  for (const version of [
-    undefined,
-    null,
-    0,
-    -1,
-    1.5,
-    "1",
-    Number.MAX_SAFE_INTEGER + 1,
+  assert.equal(validPassword("Abcde1!x"), true);
+  for (const p of [
+    "Abcd1!x",
+    "abcdef1!x",
+    "ABCDEF1!X",
+    "Abcdefg!x",
+    "Abcdef12x",
+    "Abcdef12 ",
   ])
-    assert.ok(validateAccount({ ...a, version }, defaultConfig, false));
-  assert.equal(validateAccount(a, defaultConfig, false), null);
+    assert.equal(validPassword(p), false);
 });
 
-test("account migration preserves legacy credentials and defaults new versions", () => {
-  const db = new DatabaseSync(":memory:");
-  try {
-    db.exec(readFileSync("migrations/0001_initial.sql", "utf8"));
-    db.exec(
-      "INSERT INTO users VALUES('legacy','legacy','ชื่อเดิม','original-hash','admin','[]','[]',0,1)",
-    );
-    db.exec(readFileSync("migrations/0004_account_versions.sql", "utf8"));
-    const row = db.prepare("SELECT * FROM users WHERE id='legacy'").get();
-    assert.equal(row.version, 1);
-    assert.equal(row.password, "original-hash");
-    assert.equal(row.must_change, 0);
-    assert.equal(row.active, 1);
-  } finally {
-    db.close();
-  }
+test("password symbols must be punctuation or symbols, not other alphabet letters", () => {
+  for (const value of ["Abcdefg1ก", "Abcdefg1é", "Abcdefg1中"])
+    assert.equal(validPassword(value), false);
+  for (const value of [
+    "Abcdefg1!",
+    "Abcdefg1@",
+    "Abcdefg1€",
+    "Abcdefg1_",
+    "Abcdefg1-",
+  ])
+    assert.equal(validPassword(value), true);
 });

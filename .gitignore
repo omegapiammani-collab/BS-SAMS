@@ -4,3 +4,6 @@ dist/
 .dev.vars
 *.log
 test-results/
+
+/backups/
+__pycache__/

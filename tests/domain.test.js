@@ -1,39 +1,19 @@
-import { summarize } from "./helpers/reference-summary.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
   age,
+  validNationalId,
   fiscalRange,
   personStatus,
+  summarize,
   validateReportRange,
   validatePerson,
+  validatePersonIssue,
   validatePersonUpdate,
+  removedPersonRecords,
   defaultConfig,
-  completeRequestsWithNewPayments,
 } from "../src/domain.js";
 import { allowed, hashPassword, verifyPassword } from "../server/auth.js";
-test("new assistance completes only its request when saving", () => {
-  const previous = {
-    requests: [
-      { id: "a", status: "progress", payments: [{ id: "old" }] },
-      { id: "b", status: "pending", payments: [] },
-    ],
-  };
-  const edited = structuredClone(previous);
-  edited.requests[0].payments.push({ id: "new" });
-  const result = completeRequestsWithNewPayments(edited, previous);
-  assert.equal(result.requests[0].status, "done");
-  assert.equal(result.requests[1].status, "pending");
-  assert.equal(edited.requests[0].status, "progress");
-  assert.equal(
-    completeRequestsWithNewPayments(previous, previous).requests[0].status,
-    "progress",
-  );
-  assert.equal(
-    completeRequestsWithNewPayments(edited).requests[0].status,
-    "done",
-  );
-});
 test("age respects birthday and leap day", () => {
   assert.equal(age("2000-11-01", "2026-10-30"), 25);
   assert.equal(age("2000-10-30", "2026-10-30"), 26);
@@ -89,7 +69,7 @@ test("password hashes are salted and verify", async () => {
   assert.ok(await verifyPassword("correct-password", a));
   assert.equal(await verifyPassword("wrong", a), false);
 });
-test("request closure needs a reason and completion needs assistance", () => {
+test("closed request reasons are optional and completion needs assistance", () => {
   const p = {
     first: "ตัวอย่าง",
     last: "ทดสอบ",
@@ -97,6 +77,7 @@ test("request closure needs a reason and completion needs assistance", () => {
     disabilities: [],
     requests: [
       {
+        id: "optional-reason-request",
         category: "0",
         type: "สงเคราะห์",
         date: "2026-10-01",
@@ -105,7 +86,15 @@ test("request closure needs a reason and completion needs assistance", () => {
       },
     ],
   };
-  assert.match(validatePerson(p, defaultConfig), /เหตุผล/);
+  assert.equal(validatePerson(p, defaultConfig), null);
+  p.requests[0].status = "cancelled";
+  assert.equal(validatePerson(p, defaultConfig), null);
+  p.requests[0].status = "referred";
+  assert.match(validatePerson(p, defaultConfig), /สถานะ/);
+  assert.equal(
+    validatePerson(p, defaultConfig, undefined, structuredClone(p)),
+    null,
+  );
   p.requests[0].status = "done";
   assert.match(validatePerson(p, defaultConfig), /บันทึกการช่วยเหลือ/);
 });
@@ -194,12 +183,12 @@ test("actual recipients include prior-year requests and repeated payments count 
   assert.equal(s.monthly[0].helpedPeople, 1);
 });
 
-test("saved request and payment history cannot be dropped during an edit", () => {
+test("request and payment deletion is allowed while category locking remains", () => {
   const previous = { requests: [{ id: "r1", payments: [{ id: "p1" }] }] };
-  assert.match(validatePersonUpdate({ requests: [] }, previous), /คำขอ/);
-  assert.match(
+  assert.equal(validatePersonUpdate({ requests: [] }, previous), null);
+  assert.equal(
     validatePersonUpdate({ requests: [{ id: "r1", payments: [] }] }, previous),
-    /ประวัติ/,
+    null,
   );
   assert.equal(
     validatePersonUpdate(
@@ -242,38 +231,167 @@ test("malformed nested records and duplicate payment identities are rejected", (
   assert.match(validatePerson(p, defaultConfig), /ซ้ำ/);
   p.requests[0].payments = [payment];
   assert.equal(validatePerson(p, defaultConfig), null);
+  p.requests[0].payments[0].detail = "";
+  assert.equal(validatePerson(p, defaultConfig), null);
 });
 
-test("displayed personal fields and notes must be text, not nested objects", () => {
-  const p = {
-    title: "นาย",
+test("saved request categories are immutable while separate new requests are allowed", () => {
+  const request = { id: "r1", category: "0", payments: [] };
+  const previous = { requests: [request] };
+  assert.match(
+    validatePersonUpdate(
+      { requests: [{ ...request, category: "1" }] },
+      previous,
+    ),
+    /หมวดหมู่/,
+  );
+  assert.equal(
+    validatePersonUpdate(
+      { requests: [request, { id: "r2", category: "1", payments: [] }] },
+      previous,
+    ),
+    null,
+  );
+});
+
+test("one assistance event per request preserves legacy history without allowing additions", () => {
+  const payment = {
+    id: "pay1",
+    date: "2026-10-30",
+    provider: "หน่วยงาน",
+    detail: "",
+    amount: "100",
+    quantity: "",
+    unit: "",
+  };
+  const previous = {
+    first: "ทดสอบ",
+    last: "ระบบ",
+    village: 1,
+    disabilities: [],
+    requests: [
+      {
+        id: "req1",
+        category: "0",
+        type: "ทดสอบ",
+        date: "2026-10-30",
+        status: "done",
+        payments: [payment, { ...payment, id: "pay2" }],
+      },
+    ],
+  };
+  assert.match(
+    validatePerson(previous, defaultConfig, "2026-10-31"),
+    /หนึ่งครั้ง/,
+  );
+  assert.equal(
+    validatePerson(
+      structuredClone(previous),
+      defaultConfig,
+      "2026-10-31",
+      previous,
+    ),
+    null,
+  );
+  const extra = structuredClone(previous);
+  extra.requests[0].payments.push({ ...payment, id: "pay3" });
+  assert.match(
+    validatePerson(extra, defaultConfig, "2026-10-31", previous),
+    /หนึ่งครั้ง/,
+  );
+  const replaced = structuredClone(previous);
+  replaced.requests[0].payments[1].id = "new-id";
+  assert.match(
+    validatePerson(replaced, defaultConfig, "2026-10-31", previous),
+    /หนึ่งครั้ง/,
+  );
+  const single = structuredClone(previous);
+  single.requests[0].payments = [payment];
+  assert.equal(validatePerson(single, defaultConfig, "2026-10-31"), null);
+  assert.equal(validatePersonUpdate(single, previous), null);
+});
+
+test("deletion tracking includes assistance within a removed request", () => {
+  const old = {
+    requests: [
+      { id: "r1", payments: [{ id: "p1" }] },
+      { id: "r2", payments: [{ id: "p2" }] },
+    ],
+  };
+  assert.deepEqual(
+    removedPersonRecords({ requests: [{ id: "r2", payments: [] }] }, old),
+    { requests: ["r1"], payments: ["p1", "p2"] },
+  );
+});
+
+// Synthetic checksum-valid value, not a fixture from a real person's record.
+test("national ID requires exactly 13 ASCII digits and a valid check digit", () => {
+  assert.equal(validNationalId("1234567890121"), true);
+  for (const value of [
+    "123456789012",
+    "12345678901210",
+    "1234567890122",
+    "123456789012A",
+    "๑๒๓๔๕๖๗๘๙๐๑๒๑",
+    1234567890121,
+    null,
+  ])
+    assert.equal(validNationalId(value), false);
+});
+
+test("person validation identifies fields across hidden requests and assistance", () => {
+  const person = {
     first: "ทดสอบ",
     last: "ระบบ",
     village: 1,
     disabilities: [],
     requests: [],
   };
-  for (const key of ["title", "marital", "house", "phone", "nationalId"])
-    assert.ok(validatePerson({ ...p, [key]: {} }, defaultConfig));
-  const r = {
-    id: "r1",
+  assert.equal(
+    validatePersonIssue(
+      { ...person, nationalId: "1234567890122" },
+      defaultConfig,
+    ).field,
+    "nationalId",
+  );
+  const request = {
+    id: "request-a",
     category: "0",
-    type: "ทดสอบ",
+    type: "",
     date: "2026-10-01",
     status: "pending",
     payments: [],
   };
-  assert.ok(
-    validatePerson(
-      { ...p, requests: [{ ...r, note: { unexpected: true } }] },
-      defaultConfig,
-    ),
+  const invalidRequest = { ...person, requests: [request] };
+  const issue = validatePersonIssue(
+    invalidRequest,
+    defaultConfig,
+    "2026-10-31",
   );
+  assert.equal(issue.field, "requests.request-a.type");
   assert.equal(
-    validatePerson(
-      { ...p, requests: [{ ...r, note: "ข้อความที่อ่านได้" }] },
-      defaultConfig,
-    ),
+    issue.message,
+    validatePerson(invalidRequest, defaultConfig, "2026-10-31"),
+  );
+  request.type = "เงินสงเคราะห์";
+  request.payments = [
+    {
+      id: "payment-a",
+      date: "2026-10-02",
+      provider: "หน่วยงานทดสอบ",
+      amount: 100,
+      quantity: 1,
+      unit: "",
+      detail: "",
+    },
+  ];
+  assert.equal(
+    validatePersonIssue(invalidRequest, defaultConfig, "2026-10-31").field,
+    "requests.request-a.payments.payment-a.unit",
+  );
+  request.payments[0].unit = "ชิ้น";
+  assert.equal(
+    validatePersonIssue(invalidRequest, defaultConfig, "2026-10-31"),
     null,
   );
 });

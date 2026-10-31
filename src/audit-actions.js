@@ -1,8 +1,13 @@
 export const auditActions = {
+  "confirm-distinct-person": "ยืนยันเพิ่มบุคคลแยกจากรายการที่อาจซ้ำ",
   "create-person": "เพิ่มทะเบียนบุคคล",
   "update-person": "แก้ไขทะเบียนบุคคล",
+  "delete-request": "ลบคำขอความช่วยเหลือ",
+  "delete-assistance": "ลบประวัติการช่วยเหลือ",
   "delete-person": "ย้ายทะเบียนเข้าถังขยะ",
+  "purge-person": "ลบทะเบียนบุคคลถาวร",
   restore: "กู้คืนทะเบียนบุคคล",
+  "export-person": "ส่งออกรายละเอียดรายบุคคล",
   export: "ส่งออกทะเบียนบุคคล",
   "export-report": "ส่งออกรายงานสรุป",
   "create-user": "สร้างบัญชีผู้ใช้งาน",

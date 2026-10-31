@@ -1,12 +1,15 @@
-import { readSummary } from "./summary.js";
-import { lifecyclePlan, desiredState } from "./lifecycle.js";
-import { findDuplicates } from "./duplicates.js";
-import { cleanConfig } from "./config.js";
 import {
-  validateAccount,
-  validPassword,
-  validAccountVersion,
-} from "./accounts.js";
+  DraftError,
+  listDrafts,
+  readDraft,
+  saveDraft,
+  deleteDraft,
+  draftCleanup,
+} from "./drafts.js";
+import { findDuplicates } from "./duplicates.js";
+import { readJsonObject, RequestBodyError } from "./request-body.js";
+import { passwordHelp } from "../src/password-policy.js";
+import { validateAccount, validPassword } from "./accounts.js";
 import { listAudit } from "./audit.js";
 import {
   parsePeopleQuery,
@@ -17,10 +20,11 @@ import {
 } from "./people.js";
 import {
   defaultConfig,
+  summarize,
   validateReportRange,
   validatePerson,
   validatePersonUpdate,
-  completeRequestsWithNewPayments,
+  removedPersonRecords,
 } from "../src/domain.js";
 import { hashPassword, verifyPassword, safeUser, allowed } from "./auth.js";
 const json = (data, status = 200, headers = {}) =>
@@ -48,11 +52,14 @@ async function config(db) {
   const row = await db
     .prepare("SELECT data FROM config WHERE id='system'")
     .first();
-  return row
-    ? { ...JSON.parse(row.data), revision: JSON.parse(row.data).revision ?? 0 }
-    : { ...structuredClone(defaultConfig), revision: 0 };
+  return row ? JSON.parse(row.data) : structuredClone(defaultConfig);
 }
 export default {
+  async scheduled(_event, env) {
+    await env.DB.prepare("DELETE FROM person_drafts WHERE expires_at<=?")
+      .bind(Date.now())
+      .run();
+  },
   async fetch(request, env) {
     const url = new URL(request.url),
       path = url.pathname;
@@ -72,11 +79,12 @@ export default {
           return fail("ข้อมูลมีขนาดใหญ่เกินไป", 413);
       }
       if (path === "/api/login" && method === "POST") {
-        const b = await request.json();
+        const b = await readJsonObject(request);
         if (
           typeof b.username !== "string" ||
           typeof b.password !== "string" ||
-          b.password.length > 256
+          b.password.length > 256 ||
+          (b.remember !== undefined && typeof b.remember !== "boolean")
         )
           return fail("ข้อมูลเข้าสู่ระบบไม่ถูกต้อง");
         const key = request.headers.get("CF-Connecting-IP") || "local",
@@ -103,12 +111,14 @@ export default {
         if (!row || !valid)
           return fail("ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง", 401);
         const token = crypto.randomUUID() + crypto.randomUUID();
+        const remember = b.remember === true && !row.must_change;
+        const lifetime = remember ? 30 * 24 * 3600 : 8 * 3600;
         await db
           .prepare("INSERT INTO sessions VALUES(?,?,?)")
-          .bind(token, row.id, now + 8 * 3600000)
+          .bind(token, row.id, now + lifetime * 1000)
           .run();
         return json(safeUser(row), 200, {
-          "Set-Cookie": `session=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=28800${url.protocol === "https:" ? "; Secure" : ""}`,
+          "Set-Cookie": `session=${token}; HttpOnly; SameSite=Strict; Path=/${remember ? `; Max-Age=${lifetime}` : ""}${url.protocol === "https:" ? "; Secure" : ""}`,
         });
       }
       const row = await db
@@ -131,77 +141,129 @@ export default {
         });
       }
       if (path === "/api/password" && method === "POST") {
-        const b = await request.json();
+        const b = await readJsonObject(request);
         if (
           typeof b.current !== "string" ||
           b.current.length > 128 ||
           !(await verifyPassword(b.current, row.password))
         )
           return fail("รหัสผ่านเดิมไม่ถูกต้อง");
-        if (
-          typeof b.password !== "string" ||
-          b.password.length < 12 ||
-          b.password.length > 128 ||
-          b.password === b.current
-        )
-          return fail("ใช้รหัสผ่านใหม่ 12–128 ตัวอักษร");
-        const result = await db.batch([
+        if (!validPassword(b.password) || b.password === b.current)
+          return fail(passwordHelp);
+        await db.batch([
           db
-            .prepare(
-              "UPDATE users SET password=?,must_change=0,version=version+1 WHERE id=? AND version=?",
-            )
-            .bind(await hashPassword(b.password), u.id, row.version),
-          audit(db, u, "change-password", u.id, true),
-          db
-            .prepare("DELETE FROM sessions WHERE user_id=? AND changes()>0")
-            .bind(u.id),
+            .prepare("UPDATE users SET password=?,must_change=0 WHERE id=?")
+            .bind(await hashPassword(b.password), u.id),
+          db.prepare("DELETE FROM sessions WHERE user_id=?").bind(u.id),
+          audit(db, u, "change-password", u.id),
         ]);
-        if (!result[0].meta.changes)
-          return fail("บัญชีมีการเปลี่ยนแปลงแล้ว กรุณาเข้าสู่ระบบใหม่", 409);
         return json({ ok: true }, 200, {
           "Set-Cookie":
             "session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0",
         });
       }
       if (u.mustChange) return fail("กรุณาเปลี่ยนรหัสผ่านก่อนใช้งาน", 403);
+      if (path === "/api/drafts" && method === "GET")
+        return json(await listDrafts(db, u));
+      const draftMatch = path.match(/^\/api\/drafts\/([a-f0-9-]{36})$/i);
+      if (draftMatch) {
+        if (method === "GET")
+          return json(await readDraft(db, u, draftMatch[1]));
+        if (method === "PUT")
+          return json(
+            await saveDraft(
+              db,
+              u,
+              draftMatch[1],
+              await readJsonObject(request),
+            ),
+          );
+        if (method === "DELETE")
+          return json(
+            await deleteDraft(
+              db,
+              u,
+              draftMatch[1],
+              (await readJsonObject(request)).version,
+            ),
+          );
+      }
       if (path === "/api/config") {
         if (method === "GET") return json(await config(db));
         if (method === "PUT" && u.role === "admin") {
-          const b = await request.json();
-          const current = await config(db);
-          const parsed = cleanConfig(b, current);
-          if (parsed.error) return fail(parsed.error);
-          if (b.revision !== current.revision)
-            return fail(
-              "มีผู้ดูแลแก้ไขการตั้งค่าแล้ว กรุณาโหลดค่าล่าสุดก่อนบันทึก",
-              409,
-            );
-          const result = await db.batch([
+          const b = await readJsonObject(request);
+          if (
+            typeof b.name !== "string" ||
+            !b.name.trim() ||
+            !Array.isArray(b.villages) ||
+            !b.villages.length ||
+            !Array.isArray(b.types) ||
+            b.types.length !== 7
+          )
+            return fail("การตั้งค่าไม่ถูกต้อง");
+          if (
+            b.villages.some(
+              (v) =>
+                !v ||
+                typeof v !== "object" ||
+                !Number.isInteger(v.id) ||
+                typeof v.name !== "string" ||
+                !v.name.trim(),
+            ) ||
+            new Set(b.villages.map((v) => v.id)).size !== b.villages.length
+          )
+            return fail("ข้อมูลหมู่บ้านไม่ถูกต้อง");
+          if (
+            b.name.length > 200 ||
+            b.types.some(
+              (t, i) =>
+                !t ||
+                typeof t !== "object" ||
+                t.id !== String(i) ||
+                !Array.isArray(t.items) ||
+                t.items.length > 100 ||
+                t.items.some((x) => typeof x !== "string" || x.length > 300),
+            ) ||
+            b.villages.some((v) => typeof v.active !== "boolean") ||
+            typeof b.logo !== "string" ||
+            b.logo.length > 280000
+          )
+            return fail("การตั้งค่าไม่ถูกต้อง");
+          if (b.logo && !/^data:image\/(png|jpeg|webp);base64,/.test(b.logo))
+            return fail("โลโก้ต้องเป็น PNG, JPEG หรือ WebP");
+          await db.batch([
             db
               .prepare(
-                "INSERT INTO config(id,data) VALUES('system',?) ON CONFLICT(id) DO UPDATE SET data=excluded.data WHERE COALESCE(json_extract(config.data,'$.revision'),0)=?",
+                "INSERT INTO config VALUES('system',?) ON CONFLICT(id) DO UPDATE SET data=excluded.data",
               )
-              .bind(JSON.stringify(parsed.value), b.revision),
-            audit(db, u, "update-config", "system", true),
+              .bind(JSON.stringify(b)),
+            audit(db, u, "update-config", "system"),
           ]);
-          if (!result[0].meta.changes)
-            return fail(
-              "มีผู้ดูแลแก้ไขการตั้งค่าแล้ว กรุณาโหลดค่าล่าสุดก่อนบันทึก",
-              409,
-            );
-          return json(parsed.value);
+          return json(b);
         }
         return fail("ไม่มีสิทธิ์", 403);
       }
+      const all = async () => {
+        const result = await db.prepare("SELECT * FROM people").all();
+        return result.results.map((p) => ({
+          ...JSON.parse(p.data),
+          id: p.id,
+          version: p.version,
+          deletedAt: p.deleted_at,
+          deletedBy: p.deleted_by,
+          deleteReason: p.delete_reason,
+        }));
+      };
       if (path === "/api/summary" && method === "GET") {
         const from = url.searchParams.get("from"),
           to = url.searchParams.get("to");
         const error = validateReportRange(from, to);
         if (error) return fail(error);
-        return json(await readSummary(db, from, to));
+        const list = (await all()).filter((p) => !p.deletedAt);
+        return json(summarize(list, from, to));
       }
       if (path === "/api/report-export" && method === "POST") {
-        const { from, to } = await request.json();
+        const { from, to } = await readJsonObject(request);
         const error = validateReportRange(from, to);
         if (error) return fail(error);
         if (
@@ -211,7 +273,11 @@ export default {
           return fail("ไม่มีสิทธิ์ส่งออกรายงาน", 403);
         const query = parsePeopleQuery(new URLSearchParams());
         const selection = peopleSelection(u, query, true);
-        const summary = await readSummary(db, from, to, selection);
+        const rows = await db
+          .prepare(`SELECT * FROM people WHERE ${selection.where}`)
+          .bind(...selection.args)
+          .all();
+        const summary = summarize(rows.results.map(personFromRow), from, to);
         await audit(db, u, "export-report", "summary").run();
         return json(summary);
       }
@@ -221,7 +287,7 @@ export default {
         return json(await listPeople(db, u, query));
       }
       if (path === "/api/export" && method === "POST") {
-        const b = await request.json();
+        const b = await readJsonObject(request);
         const query = parsePeopleQuery(new URLSearchParams(b.filters || {}));
         query.trash = false;
         const selection = peopleSelection(u, query, true);
@@ -235,23 +301,29 @@ export default {
         await audit(db, u, "export", "people").run();
         return json(list);
       }
-      if (path === "/api/people/duplicate-check" && method === "POST")
-        return json(await findDuplicates(db, u, await request.json()));
       if (path === "/api/people" && method === "POST") {
-        const p = await request.json(),
+        const p = await readJsonObject(request),
           cfg = await config(db);
-        if (!p || typeof p !== "object" || Array.isArray(p))
-          return fail("ข้อมูลบุคคลไม่ถูกต้อง");
         p.village = Number(p.village);
+        const cleanup = draftCleanup(db, u, p);
         const err = validatePerson(p, cfg);
         if (err) return fail(err);
-        p.requests = completeRequestsWithNewPayments(p).requests;
-        if (!cfg.villages.some((v) => v.id === p.village && v.active))
-          return fail(
-            "หมู่บ้านนี้ปิดใช้งานแล้ว กรุณาเลือกหมู่บ้านที่เปิดใช้งาน",
-          );
         if (!allowed(u, "create", p.village) || !allowed(u, "view", p.village))
           return fail("ไม่มีสิทธิ์ในหมู่บ้านนี้", 403);
+        delete p.id;
+        delete p.version;
+        delete p.__dateDrafts;
+        const review = await findDuplicates(db, u, p);
+        if (review.candidates.length && p.duplicateReviewToken !== review.token)
+          return json(
+            {
+              error: "พบทะเบียนที่อาจเป็นบุคคลเดียวกัน กรุณาตรวจสอบก่อนบันทึก",
+              code: "DUPLICATE_REVIEW",
+              ...review,
+            },
+            409,
+          );
+        delete p.duplicateReviewToken;
         const id = crypto.randomUUID();
         p.id = id;
         p.createdAt = new Date().toISOString();
@@ -267,8 +339,53 @@ export default {
               JSON.stringify(p),
             ),
           audit(db, u, "create-person", id),
+          ...(review.candidates.length
+            ? [audit(db, u, "confirm-distinct-person", id)]
+            : []),
+          ...cleanup,
         ]);
         return json({ ...p, version: 1 }, 201);
+      }
+      const personExportMatch = path.match(/^\/api\/people\/([^/]+)\/export$/);
+      if (personExportMatch && method === "POST") {
+        const stored = await db
+          .prepare("SELECT * FROM people WHERE id=?")
+          .bind(personExportMatch[1])
+          .first();
+        if (!stored || stored.deleted_at) return fail("ไม่พบข้อมูล", 404);
+        if (
+          !allowed(u, "view", stored.village) ||
+          !allowed(u, "export", stored.village)
+        )
+          return fail("ไม่มีสิทธิ์ส่งออกข้อมูลบุคคลนี้", 403);
+        await audit(db, u, "export-person", stored.id).run();
+        return json(personFromRow(stored));
+      }
+      const purgeMatch = path.match(/^\/api\/people\/([^/]+)\/purge$/);
+      if (purgeMatch && method === "DELETE") {
+        if (u.role !== "admin") return fail("เฉพาะผู้ดูแลระบบเท่านั้น", 403);
+        const body = await readJsonObject(request);
+        if (!Number.isInteger(body.version))
+          return fail("กรุณาระบุเวอร์ชันข้อมูล");
+        const result = await db.batch([
+          db
+            .prepare(
+              "DELETE FROM people WHERE id=? AND deleted_at IS NOT NULL AND version=?",
+            )
+            .bind(purgeMatch[1], body.version),
+          audit(db, u, "purge-person", purgeMatch[1], true),
+          db
+            .prepare(
+              "DELETE FROM person_drafts WHERE person_id=? AND changes()>0",
+            )
+            .bind(purgeMatch[1]),
+        ]);
+        if (!result[0].meta.changes)
+          return fail(
+            "ข้อมูลเปลี่ยนแปลงหรือไม่อยู่ในถังขยะ กรุณาโหลดใหม่",
+            409,
+          );
+        return json({ ok: true });
       }
       const match = path.match(/^\/api\/people\/([^/]+)(\/restore)?$/);
       if (match) {
@@ -279,92 +396,32 @@ export default {
             .first();
         if (!stored) return fail("ไม่พบข้อมูล", 404);
         const old = JSON.parse(stored.data);
-        const operation =
-          method === "DELETE" && !match[2]
-            ? "delete"
-            : method === "POST" && match[2]
-              ? "restore"
-              : null;
-        if (operation) {
-          if (operation === "restore" && u.role !== "admin")
-            return fail("ไม่มีสิทธิ์", 403);
-          if (
-            operation === "delete" &&
-            (!allowed(u, "view", stored.village) ||
-              !allowed(u, "delete", stored.village))
-          )
-            return fail("ไม่มีสิทธิ์", 403);
-          const plan = lifecyclePlan(stored, operation, await request.json());
-          if (plan.error) return fail(plan.error, plan.status);
-          if (plan.unchanged)
-            return json({ ok: true, changed: false, version: stored.version });
-          const mutation =
-            operation === "delete"
-              ? db
-                  .prepare(
-                    "UPDATE people SET deleted_at=?,deleted_by=?,delete_reason=?,version=version+1 WHERE id=? AND version=? AND deleted_at IS NULL",
-                  )
-                  .bind(
-                    new Date().toISOString(),
-                    u.username,
-                    plan.reason,
-                    id,
-                    plan.version,
-                  )
-              : db
-                  .prepare(
-                    "UPDATE people SET deleted_at=NULL,deleted_by=NULL,delete_reason=NULL,version=version+1 WHERE id=? AND version=? AND deleted_at IS NOT NULL",
-                  )
-                  .bind(id, plan.version);
+        if (match[2]) {
+          if (method !== "POST") return fail("ไม่พบเส้นทาง", 404);
+          if (u.role !== "admin") return fail("ไม่มีสิทธิ์", 403);
+          if (!stored.deleted_at) return fail("ข้อมูลไม่อยู่ในถังขยะ", 409);
           const result = await db.batch([
-            mutation,
-            audit(
-              db,
-              u,
-              operation === "delete" ? "delete-person" : "restore",
-              id,
-              true,
-            ),
+            db
+              .prepare(
+                "UPDATE people SET deleted_at=NULL,deleted_by=NULL,delete_reason=NULL,version=version+1 WHERE id=? AND version=? AND deleted_at IS NOT NULL",
+              )
+              .bind(id, stored.version),
+            audit(db, u, "restore", id, true),
           ]);
-          if (result[0].meta.changes)
-            return json({
-              ok: true,
-              changed: true,
-              version: stored.version + 1,
-            });
-          const fresh = await db
-            .prepare("SELECT version,deleted_at,village FROM people WHERE id=?")
-            .bind(id)
-            .first();
-          if (!fresh) return fail("ไม่พบข้อมูล", 404);
-          if (
-            operation === "delete" &&
-            (!allowed(u, "view", fresh.village) ||
-              !allowed(u, "delete", fresh.village))
-          )
-            return fail("ไม่มีสิทธิ์", 403);
-          if (desiredState(fresh, operation))
-            return json({ ok: true, changed: false, version: fresh.version });
-          return fail(
-            "ข้อมูลเปลี่ยนแปลงแล้ว กรุณาโหลดรายการล่าสุดก่อนทำรายการ",
-            409,
-          );
-        }
-        if (method === "GET" && !match[2]) {
-          const archive = url.searchParams.get("trash") === "1";
-          if (
-            archive
-              ? u.role !== "admin" || !stored.deleted_at
-              : stored.deleted_at || !allowed(u, "view", stored.village)
-          )
-            return fail("ไม่พบข้อมูล", 404);
-          return json(personFromRow(stored));
+          if (!result[0].meta.changes)
+            return fail("ข้อมูลเปลี่ยนแปลง กรุณาโหลดใหม่", 409);
+          return json({ ok: true });
         }
         if (stored.deleted_at) return fail("ข้อมูลอยู่ในถังขยะ", 404);
-        if (method === "PUT" && !match[2]) {
-          const p = await request.json();
-          if (!p || typeof p !== "object" || Array.isArray(p))
-            return fail("ข้อมูลบุคคลไม่ถูกต้อง");
+        if (method === "GET") {
+          if (!allowed(u, "view", stored.village))
+            return fail("ไม่มีสิทธิ์", 403);
+          return json(personFromRow(stored));
+        }
+        if (method === "PUT") {
+          const p = await readJsonObject(request);
+          const cleanup = draftCleanup(db, u, p, true);
+          delete p.__dateDrafts;
           p.village = Number(p.village);
           if (
             !allowed(u, "view", stored.village) ||
@@ -373,23 +430,22 @@ export default {
             !allowed(u, "view", p.village)
           )
             return fail("ไม่มีสิทธิ์", 403);
-          const settings = await config(db);
-          const err = validatePerson(p, settings);
+          const err = validatePerson(p, await config(db), undefined, old);
           if (err) return fail(err);
-          if (
-            p.village !== stored.village &&
-            !settings.villages.some((v) => v.id === p.village && v.active)
-          )
-            return fail("ไม่สามารถย้ายทะเบียนเข้าหมู่บ้านที่ปิดใช้งาน");
           if (p.version !== stored.version)
             return fail("มีผู้แก้ไขข้อมูลแล้ว กรุณาโหลดใหม่", 409);
           const historyError = validatePersonUpdate(p, old);
           if (historyError) return fail(historyError);
-          p.requests = completeRequestsWithNewPayments(p, old).requests;
+          const removed = removedPersonRecords(p, old);
+          if (
+            (removed.requests.length || removed.payments.length) &&
+            !allowed(u, "delete", stored.village)
+          )
+            return fail("ไม่มีสิทธิ์ลบคำขอหรือประวัติการช่วยเหลือ", 403);
           const result = await db.batch([
             db
               .prepare(
-                "UPDATE people SET national_id=?,village=?,data=?,version=version+1 WHERE id=? AND version=?",
+                "UPDATE people SET national_id=?,village=?,data=?,version=version+1 WHERE id=? AND version=? AND deleted_at IS NULL",
               )
               .bind(
                 p.nationalId || null,
@@ -399,10 +455,44 @@ export default {
                 p.version,
               ),
             audit(db, u, "update-person", id, true),
+            ...removed.requests.map((target) =>
+              audit(db, u, "delete-request", target, true),
+            ),
+            ...removed.payments.map((target) =>
+              audit(db, u, "delete-assistance", target, true),
+            ),
+            ...cleanup,
           ]);
           if (!result[0].meta.changes)
             return fail("มีผู้แก้ไขข้อมูลแล้ว กรุณาโหลดใหม่", 409);
           return json({ ...p, version: p.version + 1 });
+        }
+        if (method === "DELETE") {
+          if (
+            !allowed(u, "delete", stored.village) ||
+            !allowed(u, "view", stored.village)
+          )
+            return fail("ไม่มีสิทธิ์", 403);
+          const b = await readJsonObject(request);
+          if (typeof b.reason !== "string" || !b.reason.trim())
+            return fail("กรุณาระบุเหตุผล");
+          const result = await db.batch([
+            db
+              .prepare(
+                "UPDATE people SET deleted_at=?,deleted_by=?,delete_reason=?,version=version+1 WHERE id=? AND version=? AND deleted_at IS NULL",
+              )
+              .bind(
+                new Date().toISOString(),
+                u.username,
+                b.reason,
+                id,
+                stored.version,
+              ),
+            audit(db, u, "delete-person", id, true),
+          ]);
+          if (!result[0].meta.changes)
+            return fail("ข้อมูลเปลี่ยนแปลง กรุณาโหลดใหม่", 409);
+          return json({ ok: true });
         }
       }
       const resetMatch = path.match(/^\/api\/users\/([^/]+)\/reset-password$/);
@@ -410,9 +500,8 @@ export default {
         const id = resetMatch[1];
         if (id === u.id)
           return fail("กรุณาใช้เมนูเปลี่ยนรหัสผ่านสำหรับบัญชีของคุณ");
-        const body = await request.json();
-        if (!validPassword(body?.password))
-          return fail("รหัสผ่านชั่วคราวต้องมี 12–128 ตัวอักษร");
+        const body = await readJsonObject(request);
+        if (!validPassword(body?.password)) return fail(passwordHelp);
         const target = await db
           .prepare("SELECT id,active FROM users WHERE id=?")
           .bind(id)
@@ -420,25 +509,14 @@ export default {
         if (!target) return fail("ไม่พบบัญชีผู้ใช้งาน", 404);
         if (!target.active)
           return fail("กรุณาเปิดใช้งานบัญชีก่อนรีเซ็ตรหัสผ่าน", 409);
-        if (!validAccountVersion(body.version))
-          return fail("กรุณาโหลดข้อมูลบัญชีล่าสุดก่อนรีเซ็ตรหัสผ่าน");
         const hash = await hashPassword(body.password);
-        const result = await db.batch([
+        await db.batch([
           db
-            .prepare(
-              "UPDATE users SET password=?,must_change=1,version=version+1 WHERE id=? AND version=? AND active=1",
-            )
-            .bind(hash, id, body.version),
-          audit(db, u, "reset-password", id, true),
-          db
-            .prepare("DELETE FROM sessions WHERE user_id=? AND changes()>0")
-            .bind(id),
+            .prepare("UPDATE users SET password=?,must_change=1 WHERE id=?")
+            .bind(hash, id),
+          db.prepare("DELETE FROM sessions WHERE user_id=?").bind(id),
+          audit(db, u, "reset-password", id),
         ]);
-        if (!result[0].meta.changes)
-          return fail(
-            "บัญชีมีการเปลี่ยนแปลงแล้ว กรุณาโหลดรายชื่อล่าสุดก่อนรีเซ็ตรหัสผ่าน",
-            409,
-          );
         return json({ ok: true });
       }
       if (path === "/api/users" && u.role === "admin") {
@@ -449,7 +527,7 @@ export default {
           return json(users.results.map(safeUser));
         }
         if (method === "POST" || method === "PUT") {
-          const b = await request.json();
+          const b = await readJsonObject(request);
           const invalid = validateAccount(
             b,
             await config(db),
@@ -473,9 +551,7 @@ export default {
             if (!b.password) return fail("กรุณากำหนดรหัสผ่านชั่วคราว");
             await db.batch([
               db
-                .prepare(
-                  "INSERT INTO users(id,username,name,password,role,permissions,villages,must_change,active) VALUES(?,?,?,?,?,?,?,1,?)",
-                )
+                .prepare("INSERT INTO users VALUES(?,?,?,?,?,?,?,1,?)")
                 .bind(
                   id,
                   b.username,
@@ -489,10 +565,10 @@ export default {
               audit(db, u, "create-user", id),
             ]);
           } else {
-            const result = await db.batch([
+            await db.batch([
               db
                 .prepare(
-                  "UPDATE users SET username=?,name=?,role=?,permissions=?,villages=?,active=?,version=version+1 WHERE id=? AND version=?",
+                  "UPDATE users SET username=?,name=?,role=?,permissions=?,villages=?,active=? WHERE id=?",
                 )
                 .bind(
                   b.username,
@@ -502,18 +578,10 @@ export default {
                   JSON.stringify(b.villages),
                   b.active ? 1 : 0,
                   id,
-                  b.version,
                 ),
-              audit(db, u, "update-user", id, true),
-              db
-                .prepare("DELETE FROM sessions WHERE user_id=? AND changes()>0")
-                .bind(id),
+              db.prepare("DELETE FROM sessions WHERE user_id=?").bind(id),
+              audit(db, u, "update-user", id),
             ]);
-            if (!result[0].meta.changes)
-              return fail(
-                "บัญชีมีการเปลี่ยนแปลงแล้ว กรุณาโหลดรายชื่อล่าสุดก่อนบันทึก",
-                409,
-              );
           }
           return json({ ok: true });
         }
@@ -522,14 +590,9 @@ export default {
         return json(await listAudit(db, url.searchParams));
       return fail("ไม่พบเส้นทางหรือไม่มีสิทธิ์", 404);
     } catch (e) {
+      if (e instanceof DraftError) return fail(e.message, e.status);
+      if (e instanceof RequestBodyError) return fail(e.message, e.status);
       if (e instanceof QueryError) return fail(e.message);
-      if (String(e).includes("people.national_id"))
-        return fail(
-          "เลขบัตรประชาชนนี้มีทะเบียนแล้ว กรุณาตรวจสอบทะเบียนเดิมหรือติดต่อผู้ดูแลระบบ",
-          409,
-        );
-      if (String(e).includes("users.username"))
-        return fail("ชื่อผู้ใช้นี้มีอยู่แล้ว", 409);
       if (String(e).includes("UNIQUE constraint"))
         return fail("เลขบัตรประชาชนหรือชื่อผู้ใช้ซ้ำ", 409);
       console.error("API failure", e.name);

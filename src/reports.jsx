@@ -1,4 +1,6 @@
-import React, { useEffect, useState } from "react";
+import { categoryColors } from "./category-colors.js";
+import { reportExport } from "./report-export.js";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Users,
   HeartHandshake,
@@ -10,7 +12,7 @@ import {
 import { api } from "./api";
 import { formatMoney } from "./money";
 import { categories, monthLabel, validateReportRange } from "./domain";
-import { Field, ErrorBox, Empty } from "./ui";
+import { TableScroll, Field, ErrorBox, Empty } from "./ui";
 const n = (x) => Number(x || 0).toLocaleString("th-TH");
 function useSummary(range, refresh) {
   const [data, setData] = useState(null),
@@ -93,15 +95,7 @@ export function Dashboard({ config, range, refresh, onRegistry }) {
                       width: d.category[i]
                         ? `${Math.max(3, (d.category[i] / Math.max(...d.category, 1)) * 100)}%`
                         : "0%",
-                      background: [
-                        "#004eaf",
-                        "#ffa500",
-                        "#057855",
-                        "#5c82bf",
-                        "#78b6ae",
-                        "#939bc5",
-                        "#a2acbb",
-                      ][i],
+                      background: categoryColors[i],
                     }}
                   />
                 </div>
@@ -279,7 +273,7 @@ function safeCell(v) {
   const s = String(v ?? "");
   return /^[=+\-@\t\r]/.test(s) ? "'" + s : s;
 }
-export async function downloadRows(rows, format, name) {
+export async function downloadRows(rows, format, name, pdfOptions) {
   const content = rows.map((r) =>
     r.map((v) =>
       format !== "csv" && typeof v === "number" && Number.isFinite(v)
@@ -300,6 +294,9 @@ export async function downloadRows(rows, format, name) {
       ],
       { type: "text/csv;charset=utf-8" },
     );
+  } else if (format === "pdf") {
+    const { pdfBlob } = await import("./pdf-export.js");
+    blob = await pdfBlob(rows, name, pdfOptions);
   } else {
     const { default: ExcelJS } = await import("exceljs");
     const workbook = new ExcelJS.Workbook();
@@ -314,11 +311,12 @@ export async function downloadRows(rows, format, name) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `${name}.${format === "csv" ? "csv" : "xlsx"}`;
+  a.download = `${name}.${format}`;
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 export function Reports({ user, config, range, setRange }) {
+  const controls = useRef(null);
   const [d, error] = useSummary(range),
     [type, setType] = useState("category"),
     [exportError, setError] = useState(""),
@@ -331,7 +329,11 @@ export function Reports({ user, config, range, setRange }) {
           d.villages[v.id] || 0,
         ])
     : [];
-  async function exportData(format) {
+  async function exportData(format, section) {
+    if (!controls.current.reportValidity()) {
+      setError("กรุณาตรวจสอบช่วงวันที่ก่อนส่งออกรายงาน");
+      return;
+    }
     setBusy(true);
     setError("");
     try {
@@ -339,58 +341,55 @@ export function Reports({ user, config, range, setRange }) {
         from: range[0],
         to: range[1],
       });
-      const rows =
-        type === "category"
-          ? categories.map((c, i) => [c, sum.category[i]])
-          : config.villages.map((v) => [
-              `หมู่ ${v.id} บ้าน${v.name}`,
-              sum.villages[v.id] || 0,
-            ]);
-      await downloadRows(
-        [
-          ["ช่วงวันที่", ...range],
-          ["ขอบเขตข้อมูล", "เฉพาะหมู่บ้านที่มีสิทธิ์ดูและส่งออก"],
-          ["หมวดหมู่", "จำนวนคน"],
-          ...rows,
-          [],
-          ["ยอดรวมผู้ยื่นคำขอ", sum.people],
-          ["ผู้ได้รับความช่วยเหลือจริง", sum.helpedPeople],
-          ["จำนวนครั้งช่วยเหลือ", sum.helpedEvents],
-          [],
-          [
-            "เดือน",
-            "ผู้ยื่นคำขอ (คน)",
-            "คำขอ (รายการ)",
-            "ผู้ได้รับความช่วยเหลือ (คน)",
-            "ช่วยเหลือ (ครั้ง)",
-            "จำนวนเงิน (บาท)",
-          ],
-          ...sum.monthly.map((m) => [
-            monthLabel(m.month),
-            m.requestedPeople,
-            m.requested,
-            m.helpedPeople,
-            m.helped,
-            m.amount,
-          ]),
-        ],
-        format,
-        "รายงานผู้ประสบปัญหา",
-      );
+      const output = reportExport(sum, config, range, type, section);
+      await downloadRows(output.rows, format, output.name);
     } catch (e) {
       setError(e.message);
     } finally {
       setBusy(false);
     }
   }
+  const exportButtons = (section) => (
+    <div
+      className="actions"
+      role="group"
+      aria-label={
+        section === "monthly" ? "ส่งออกรายละเอียดรายเดือน" : "ส่งออกตารางสรุป"
+      }
+    >
+      {["csv", "xlsx", "pdf"].map((format) => (
+        <button
+          key={format}
+          disabled={
+            busy ||
+            !d ||
+            !!error ||
+            (user.role !== "admin" &&
+              (!user.permissions.includes("export") ||
+                !user.permissions.includes("view")))
+          }
+          onClick={() => exportData(format, section)}
+        >
+          <Download size={16} />
+          {format === "xlsx" ? "EXCEL" : format.toUpperCase()}
+        </button>
+      ))}
+    </div>
+  );
   return (
     <>
       <section className="panel">
-        <div className="report-controls">
+        <form
+          autoComplete="on"
+          ref={controls}
+          className="report-controls"
+          onSubmit={(event) => event.preventDefault()}
+        >
           <Field label="ตั้งแต่วันที่">
             <input
               type="date"
               value={range[0]}
+              required
               max={range[1]}
               onChange={(e) =>
                 e.target.value && setRange([e.target.value, range[1]])
@@ -401,6 +400,7 @@ export function Reports({ user, config, range, setRange }) {
             <input
               type="date"
               value={range[1]}
+              required
               min={range[0]}
               onChange={(e) =>
                 e.target.value && setRange([range[0], e.target.value])
@@ -413,7 +413,7 @@ export function Reports({ user, config, range, setRange }) {
               <option value="village">รายหมู่บ้าน</option>
             </select>
           </Field>
-        </div>
+        </form>
         <div className="notice">
           นับผู้ยื่นคำขอตามวันที่ยื่น
           และผู้ได้รับความช่วยเหลือตามวันที่ได้รับจริง
@@ -452,31 +452,13 @@ export function Reports({ user, config, range, setRange }) {
             จำนวนผู้ประสบปัญหา
             {type === "category" ? "ตามประเภทความช่วยเหลือ" : "รายหมู่บ้าน"}
           </h2>
-          <div className="actions">
-            {["csv", "xlsx"].map((f) => (
-              <button
-                key={f}
-                disabled={
-                  busy ||
-                  !d ||
-                  !!error ||
-                  (user.role !== "admin" &&
-                    (!user.permissions.includes("export") ||
-                      !user.permissions.includes("view")))
-                }
-                onClick={() => exportData(f)}
-              >
-                <Download size={16} />
-                {f.toUpperCase()}
-              </button>
-            ))}
-          </div>
+          {exportButtons("summary")}
         </div>
-        <div className="table-scroll">
+        <TableScroll aria-label="ตารางรายงานสรุป">
           <table>
             <thead>
               <tr>
-                <th>หมวดหมู่</th>
+                <th>{type === "village" ? "หมู่บ้าน" : "หมวดหมู่"}</th>
                 <th>จำนวนผู้ประสบปัญหา</th>
               </tr>
             </thead>
@@ -489,19 +471,20 @@ export function Reports({ user, config, range, setRange }) {
               ))}
             </tbody>
           </table>
-        </div>
+        </TableScroll>
       </section>
       {d && (
         <section className="panel">
           <div className="panel-title">
             <h2>รายละเอียดรายเดือน</h2>
+            {exportButtons("monthly")}
           </div>
           <p className="panel-note">
             จำนวนคนในแต่ละเดือนนับไม่ซ้ำภายในเดือน
             การรวมรายเดือนอาจมากกว่ายอดคนทั้งช่วงวันที่
             ผู้ได้รับความช่วยเหลืออาจยื่นคำขอก่อนช่วงวันที่นี้
           </p>
-          <div className="table-scroll">
+          <TableScroll aria-label="ตารางรายละเอียดรายเดือน">
             <table>
               <thead>
                 <tr>
@@ -526,7 +509,7 @@ export function Reports({ user, config, range, setRange }) {
                 ))}
               </tbody>
             </table>
-          </div>
+          </TableScroll>
         </section>
       )}
     </>

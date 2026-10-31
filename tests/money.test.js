@@ -1,7 +1,6 @@
-import { summarize } from "./helpers/reference-summary.js";
 import test from "node:test";
 import assert from "node:assert/strict";
-import { validatePerson, defaultConfig } from "../src/domain.js";
+import { summarize, validatePerson, defaultConfig } from "../src/domain.js";
 import { toSatang, validMoney, sumMoney, thailandDate } from "../src/money.js";
 test("currency totals sum integer satang rather than binary fractions", () => {
   assert.equal(sumMoney([{ amount: "0.10" }, { amount: "0.20" }]), 0.3);

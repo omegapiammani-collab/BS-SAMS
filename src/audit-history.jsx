@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { ChevronLeft, ChevronRight, Search } from "lucide-react";
 import { api } from "./api";
 import { auditActions, auditTarget } from "./audit-actions";
-import { Field, Select, Empty, ErrorBox } from "./ui";
+import { TableScroll, Field, Select, Empty, ErrorBox } from "./ui";
 export function AuditHistory() {
   const [draft, setDraft] = useState({
       from: "",
@@ -49,6 +49,7 @@ export function AuditHistory() {
         ข้อมูลรหัสผ่านและรายละเอียดส่วนบุคคลไม่ถูกเก็บในประวัตินี้
       </p>
       <form
+        autoComplete="on"
         onSubmit={(e) => {
           e.preventDefault();
           setFilters({ ...draft });
@@ -113,7 +114,7 @@ export function AuditHistory() {
         </div>
       </form>
       <ErrorBox error={error} />
-      <div className="table-scroll">
+      <TableScroll aria-label="ตารางประวัติการทำรายการ">
         <table>
           <thead>
             <tr>
@@ -151,7 +152,7 @@ export function AuditHistory() {
             ))}
           </tbody>
         </table>
-      </div>
+      </TableScroll>
       {loading ? (
         <p className="loading" role="status">
           กำลังโหลดประวัติ…

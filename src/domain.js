@@ -1,4 +1,4 @@
-import { validMoney, thailandDate } from "./money.js";
+import { toSatang, validMoney, thailandDate } from "./money.js";
 export const villageNames = [
   "ทรายมูล",
   "จำค่า",
@@ -44,25 +44,13 @@ export const statuses = {
   cancelled: "ผู้ยื่นยกเลิก",
   referred: "ส่งต่อหน่วยงานอื่น",
 };
+export const requestReasonLabel = (status) =>
+  status === "rejected"
+    ? "เหตุผลที่ไม่อนุมัติ"
+    : status === "cancelled"
+      ? "เหตุผลที่ยกเลิก"
+      : "เหตุผลยุติคำขอ";
 export const closed = ["rejected", "cancelled", "referred"];
-export function completeRequestsWithNewPayments(
-  person,
-  previous = { requests: [] },
-) {
-  return {
-    ...person,
-    requests: person.requests.map((request) => {
-      const saved = new Set(
-        (
-          previous.requests.find((r) => r.id === request.id)?.payments ?? []
-        ).map((payment) => payment.id),
-      );
-      return request.payments.some((payment) => !saved.has(payment.id))
-        ? { ...request, status: "done" }
-        : request;
-    }),
-  };
-}
 export const permissions = ["view", "create", "edit", "delete", "export"];
 export const permissionLabels = [
   "ดูข้อมูล",
@@ -72,7 +60,6 @@ export const permissionLabels = [
   "ส่งออก",
 ];
 export const defaultConfig = {
-  revision: 0,
   name: "ระบบข้อมูลผู้ประสบปัญหาทางสังคม",
   logo: "",
   villages: villageNames.map((name, i) => ({ id: i + 1, name, active: true })),
@@ -138,7 +125,7 @@ export const personLabels = {
   closed: "ยุติคำขอแล้ว",
 };
 export function validNationalId(id) {
-  if (!/^\d{13}$/.test(id)) return false;
+  if (typeof id !== "string" || !/^[0-9]{13}$/.test(id)) return false;
   let n = 0;
   for (let i = 0; i < 12; i++) n += Number(id[i]) * (13 - i);
   return (11 - (n % 11)) % 10 === Number(id[12]);
@@ -161,13 +148,106 @@ export function monthLabel(month) {
     timeZone: "Asia/Bangkok",
   }).format(new Date(month + "-01T00:00:00Z"));
 }
+export function summarize(people, from, to) {
+  const within = (d) => d >= from && d <= to;
+  const monthly = [];
+  let year = Number(from.slice(0, 4)),
+    month = Number(from.slice(5, 7));
+  while (`${year}-${String(month).padStart(2, "0")}` <= to.slice(0, 7)) {
+    monthly.push({
+      month: `${year}-${String(month).padStart(2, "0")}`,
+      requested: 0,
+      helped: 0,
+      requestedPeople: 0,
+      helpedPeople: 0,
+      amount: 0,
+    });
+    month++;
+    if (month === 13) {
+      month = 1;
+      year++;
+    }
+  }
+  const months = new Map(monthly.map((m) => [m.month, m]));
+  const applicants = new Map(monthly.map((m) => [m.month, new Set()]));
+  const recipients = new Map(monthly.map((m) => [m.month, new Set()]));
+  const helpedPeople = new Set();
+  const result = {
+    people: 0,
+    requests: 0,
+    done: 0,
+    partial: 0,
+    closed: 0,
+    amount: 0,
+    helpedPeople: 0,
+    helpedEvents: 0,
+    unknownAge: 0,
+    category: categories.map(() => 0),
+    ages: [0, 0, 0, 0],
+    villages: {},
+    monthly,
+  };
+  for (const p of people) {
+    const rs = (p.requests || []).filter((r) => within(r.date));
+    if (rs.length) {
+      result.people++;
+      result.requests += rs.length;
+      const status = personStatus({ requests: rs });
+      if (status === "done") result.done++;
+      if (status === "partial") result.partial++;
+      if (status === "closed") result.closed++;
+      const a = age(p.birth, to);
+      if (a !== null) result.ages[a < 18 ? 0 : a < 26 ? 1 : a < 60 ? 2 : 3]++;
+      else result.unknownAge++;
+      result.villages[p.village] = (result.villages[p.village] || 0) + 1;
+      for (let c = 0; c < 7; c++)
+        if (rs.some((r) => Number(r.category) === c)) result.category[c]++;
+      for (const r of rs) {
+        const key = r.date.slice(0, 7);
+        months.get(key).requested++;
+        applicants.get(key).add(p);
+      }
+    }
+    for (const r of p.requests || [])
+      for (const payment of r.payments || [])
+        if (within(payment.date)) {
+          const key = payment.date.slice(0, 7),
+            amount = toSatang(payment.amount);
+          if (amount === null) throw new Error("ข้อมูลจำนวนเงินไม่ถูกต้อง");
+          result.amount += amount;
+          result.helpedEvents++;
+          helpedPeople.add(p);
+          months.get(key).helped++;
+          months.get(key).amount += amount;
+          recipients.get(key).add(p);
+        }
+  }
+  result.amount /= 100;
+  result.helpedPeople = helpedPeople.size;
+  for (const m of monthly) {
+    m.amount /= 100;
+    m.requestedPeople = applicants.get(m.month).size;
+    m.helpedPeople = recipients.get(m.month).size;
+  }
+  return result;
+}
 export const isDate = (s) =>
   typeof s === "string" &&
   /^\d{4}-\d{2}-\d{2}$/.test(s) &&
   !Number.isNaN(Date.parse(s)) &&
   new Date(s).toISOString().slice(0, 10) === s;
-export function validatePerson(p, config, today = thailandDate()) {
-  if (!p || typeof p !== "object") return "ข้อมูลไม่ถูกต้อง";
+export function validatePerson(p, config, today = thailandDate(), previous) {
+  return validatePersonIssue(p, config, today, previous)?.message || null;
+}
+
+export function validatePersonIssue(
+  p,
+  config,
+  today = thailandDate(),
+  previous,
+) {
+  if (!p || typeof p !== "object")
+    return { message: "ข้อมูลไม่ถูกต้อง", field: null };
   if (
     typeof p.first !== "string" ||
     !p.first.trim() ||
@@ -176,89 +256,79 @@ export function validatePerson(p, config, today = thailandDate()) {
     !p.last.trim() ||
     p.last.length > 100
   )
-    return "กรุณาระบุชื่อและนามสกุล";
-  for (const [key, max] of [
-    ["title", 50],
-    ["marital", 100],
-    ["houseCode", 50],
-    ["house", 100],
-    ["phone", 20],
-    ["nationalId", 13],
-    ["birth", 10],
-  ])
-    if (
-      p[key] !== undefined &&
-      p[key] !== null &&
-      (typeof p[key] !== "string" || p[key].length > max)
-    )
-      return "รูปแบบข้อมูลส่วนบุคคลไม่ถูกต้อง";
+    return {
+      message: "กรุณาระบุชื่อและนามสกุล",
+      field:
+        typeof p.first !== "string" || !p.first.trim() || p.first.length > 100
+          ? "first"
+          : "last",
+    };
   if (!config.villages.some((v) => v.id === Number(p.village)))
-    return "หมู่บ้านไม่ถูกต้อง";
+    return { message: "หมู่บ้านไม่ถูกต้อง", field: "village" };
   if (p.nationalId && !validNationalId(p.nationalId))
-    return "เลขบัตรประชาชนไม่ถูกต้อง";
+    return { message: "เลขบัตรประชาชนไม่ถูกต้อง", field: "nationalId" };
   if (p.birth && (!isDate(p.birth) || p.birth > today))
-    return "วันเกิดไม่ถูกต้อง";
+    return { message: "วันเกิดไม่ถูกต้อง", field: "birth" };
   if (
     !Array.isArray(p.disabilities) ||
     p.disabilities.some((d) => !disabilities.includes(d))
   )
-    return "ประเภทความพิการไม่ถูกต้อง";
+    return { message: "ประเภทความพิการไม่ถูกต้อง", field: null };
   if (p.phone && !/^0\d{8,9}$/.test(p.phone))
-    return "หมายเลขโทรศัพท์ไม่ถูกต้อง";
+    return { message: "หมายเลขโทรศัพท์ไม่ถูกต้อง", field: "phone" };
   if (
     !Array.isArray(p.requests) ||
     p.requests.length > 200 ||
     p.requests.some((r) => !r || typeof r !== "object") ||
     new Set(p.requests.map((r) => r.id)).size !== p.requests.length
   )
-    return "รายการคำขอไม่ถูกต้อง";
+    return { message: "รายการคำขอไม่ถูกต้อง", field: null };
   for (const r of p.requests) {
     if (
       !/^[0-6]$/.test(String(r.category)) ||
       !Object.hasOwn(statuses, r.status) ||
+      (r.status === "referred" &&
+        !previous?.requests?.some(
+          (old) => old.id === r.id && old.status === "referred",
+        )) ||
       !isDate(r.date) ||
       typeof r.type !== "string" ||
       !r.type.trim()
     )
-      return "กรุณาระบุประเภท วันที่ และสถานะคำขอ";
-    if (
-      r.type.length > 300 ||
-      (r.note !== undefined &&
-        r.note !== null &&
-        (typeof r.note !== "string" || r.note.length > 5000)) ||
-      (r.reason !== undefined &&
-        r.reason !== null &&
-        (typeof r.reason !== "string" || r.reason.length > 1000))
-    )
-      return "บันทึกคำขอหรือเหตุผลไม่ถูกต้องหรือยาวเกินกำหนด";
+      return {
+        message: "กรุณาระบุประเภท วันที่ และสถานะคำขอ",
+        field: `requests.${r.id}.${!isDate(r.date) ? "date" : typeof r.type !== "string" || !r.type.trim() ? "type" : "status"}`,
+      };
     if (r.date > today || (p.birth && r.date < p.birth))
-      return "วันที่ยื่นคำขอต้องไม่อยู่ในอนาคตหรือก่อนวันเกิด";
-    if (
-      closed.includes(r.status) &&
-      (typeof r.reason !== "string" || !r.reason.trim())
-    )
-      return "กรุณาระบุเหตุผลยุติคำขอ";
+      return {
+        message: "วันที่ยื่นคำขอต้องไม่อยู่ในอนาคตหรือก่อนวันเกิด",
+        field: `requests.${r.id}.date`,
+      };
+    if (r.reason !== undefined && typeof r.reason !== "string")
+      return {
+        message: "รูปแบบเหตุผลไม่ถูกต้อง",
+        field: `requests.${r.id}.reason`,
+      };
     if (!Array.isArray(r.payments) || r.payments.length > 200)
-      return "ประวัติการช่วยเหลือไม่ถูกต้อง";
+      return { message: "ประวัติการช่วยเหลือไม่ถูกต้อง", field: null };
     if (r.status === "done" && !r.payments.length)
-      return "กรุณาบันทึกการช่วยเหลือก่อนระบุว่าช่วยเหลือแล้ว";
+      return {
+        message: "กรุณาบันทึกการช่วยเหลือก่อนระบุว่าช่วยเหลือแล้ว",
+        field: `requests.${r.id}.status`,
+      };
     for (const x of r.payments) {
       if (x && typeof x === "object") {
-        if (
-          typeof x.provider !== "string" ||
-          x.provider.length > 200 ||
-          typeof x.detail !== "string" ||
-          x.detail.length > 5000 ||
-          (x.unit !== undefined &&
-            x.unit !== null &&
-            (typeof x.unit !== "string" || x.unit.length > 100))
-        )
-          return "รายละเอียดการช่วยเหลือไม่ถูกต้องหรือยาวเกินกำหนด";
-
         if (!validMoney(x.amount))
-          return "จำนวนเงินต้องเป็นศูนย์หรือจำนวนบวก มีทศนิยมไม่เกิน 2 ตำแหน่ง และไม่เกิน 999,999,999.99 บาท";
+          return {
+            message:
+              "จำนวนเงินต้องเป็นศูนย์หรือจำนวนบวก มีทศนิยมไม่เกิน 2 ตำแหน่ง และไม่เกิน 999,999,999.99 บาท",
+            field: `requests.${r.id}.payments.${x.id}.amount`,
+          };
         if (x.date > today)
-          return "วันที่ได้รับความช่วยเหลือต้องไม่อยู่ในอนาคต";
+          return {
+            message: "วันที่ได้รับความช่วยเหลือต้องไม่อยู่ในอนาคต",
+            field: `requests.${r.id}.payments.${x.id}.date`,
+          };
         if (
           x.quantity !== "" &&
           x.quantity !== undefined &&
@@ -267,7 +337,10 @@ export function validatePerson(p, config, today = thailandDate()) {
             !Number.isFinite(Number(x.quantity)) ||
             Number(x.quantity) < 0)
         )
-          return "จำนวนสิ่งของต้องเป็นศูนย์หรือจำนวนบวก";
+          return {
+            message: "จำนวนสิ่งของต้องเป็นศูนย์หรือจำนวนบวก",
+            field: `requests.${r.id}.payments.${x.id}.quantity`,
+          };
       }
 
       if (
@@ -278,7 +351,6 @@ export function validatePerson(p, config, today = thailandDate()) {
         typeof x.provider !== "string" ||
         !x.provider.trim() ||
         typeof x.detail !== "string" ||
-        !x.detail.trim() ||
         !Number.isFinite(Number(x.amount || 0)) ||
         !Number.isFinite(Number(x.quantity || 0)) ||
         (!Number(x.amount) && !Number(x.quantity)) ||
@@ -287,7 +359,13 @@ export function validatePerson(p, config, today = thailandDate()) {
         (Number(x.quantity) > 0 &&
           (typeof x.unit !== "string" || !x.unit.trim()))
       )
-        return "กรุณาระบุวันที่หลังยื่นคำขอ หน่วยงาน รายละเอียด และจำนวนพร้อมหน่วยนับ";
+        return {
+          message: "กรุณาระบุวันที่หลังยื่นคำขอ หน่วยงาน และจำนวนพร้อมหน่วยนับ",
+          field:
+            !x || typeof x !== "object"
+              ? null
+              : `requests.${r.id}.payments.${x.id}.${!isDate(x.date) || x.date < r.date ? "date" : typeof x.provider !== "string" || !x.provider.trim() ? "provider" : Number(x.quantity) > 0 && (typeof x.unit !== "string" || !x.unit.trim()) ? "unit" : "amount"}`,
+        };
     }
   }
   if (
@@ -302,19 +380,50 @@ export function validatePerson(p, config, today = thailandDate()) {
         ),
     )
   )
-    return "รหัสรายการคำขอหรือการช่วยเหลือไม่ถูกต้องหรือซ้ำ";
+    return {
+      message: "รหัสรายการคำขอหรือการช่วยเหลือไม่ถูกต้องหรือซ้ำ",
+      field: null,
+    };
+  const savedRequests = new Map(
+    (previous?.requests || []).map((r) => [r.id, r]),
+  );
+  for (const request of p.requests) {
+    if (request.payments.length <= 1) continue;
+    const saved = savedRequests.get(request.id);
+    const savedIds = new Set(saved?.payments.map((payment) => payment.id));
+    if (
+      !saved ||
+      request.payments.length > saved.payments.length ||
+      request.payments.some((payment) => !savedIds.has(payment.id))
+    )
+      return {
+        message:
+          "คำขอหนึ่งรายการบันทึกการช่วยเหลือได้หนึ่งครั้ง หากช่วยเหลืออีกครั้งกรุณาสร้างคำขอใหม่",
+        field: `requests.${request.id}.status`,
+      };
+  }
   return null;
 }
 
+export function removedPersonRecords(next, previous) {
+  const current = new Map(next.requests.map((r) => [r.id, r]));
+  const requests = [];
+  const payments = [];
+  for (const old of previous.requests) {
+    const retained = current.get(old.id);
+    if (!retained) requests.push(old.id);
+    const ids = new Set(retained?.payments.map((payment) => payment.id));
+    for (const payment of old.payments)
+      if (!ids.has(payment.id)) payments.push(payment.id);
+  }
+  return { requests, payments };
+}
 export function validatePersonUpdate(next, previous) {
   const requests = new Map(next.requests.map((r) => [r.id, r]));
   for (const old of previous.requests) {
     const current = requests.get(old.id);
-    if (!current)
-      return "ไม่สามารถลบคำขอที่บันทึกแล้ว กรุณาเปลี่ยนสถานะพร้อมเหตุผลแทน";
-    const payments = new Set(current.payments.map((p) => p.id));
-    if (old.payments.some((p) => !payments.has(p.id)))
-      return "ไม่สามารถลบประวัติการช่วยเหลือที่บันทึกแล้ว";
+    if (current && current.category !== old.category)
+      return "ไม่สามารถเปลี่ยนหมวดหมู่ของคำขอที่บันทึกแล้ว";
   }
   return null;
 }

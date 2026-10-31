@@ -1,84 +1,43 @@
-import { isDate, validNationalId } from "../src/domain.js";
-import {
-  QueryError,
-  parsePeopleQuery,
-  peopleSelection,
-  personListItem,
-} from "./people.js";
-export function duplicateSelection(user, b) {
-  if (
-    !b ||
-    typeof b !== "object" ||
-    Array.isArray(b) ||
-    ["first", "last", "birth", "phone", "nationalId", "id"].some(
-      (key) => b[key] !== undefined && typeof b[key] !== "string",
-    ) ||
-    String(b.first || "").length > 100 ||
-    String(b.last || "").length > 100 ||
-    String(b.id || "").length > 100
-  )
-    throw new QueryError("ข้อมูลตรวจสอบทะเบียนซ้ำไม่ถูกต้อง");
-  if (
-    (b.birth && !isDate(b.birth)) ||
-    (b.phone && !/^0\d{8,9}$/.test(b.phone)) ||
-    (b.nationalId && !validNationalId(b.nationalId))
-  )
-    throw new QueryError("วันเกิด เบอร์โทร หรือเลขบัตรไม่ถูกต้อง");
-  const signals = [],
-    identity = [],
-    identityArgs = [];
-  if (b.birth) {
-    identity.push("json_extract(data,'$.birth')=?");
-    identityArgs.push(b.birth);
-  }
-  if (b.phone) {
-    identity.push("json_extract(data,'$.phone')=?");
-    identityArgs.push(b.phone);
-  }
-  const matchArgs = [];
-  if (b.nationalId) {
-    signals.push("national_id=?");
-    matchArgs.push(b.nationalId);
-  }
-  if (b.first?.trim() && b.last?.trim() && identity.length) {
-    signals.push(
-      `(lower(trim(json_extract(data,'$.first')))=lower(?) AND lower(trim(json_extract(data,'$.last')))=lower(?) AND (${identity.join(" OR ")}))`,
-    );
-    matchArgs.push(b.first.trim(), b.last.trim(), ...identityArgs);
-  }
-  if (!signals.length) return null;
-  const scope = peopleSelection(user, parsePeopleQuery(new URLSearchParams()));
-  return {
-    where: `${scope.where} AND (${signals.join(" OR ")})${b.id ? " AND id<>?" : ""}`,
-    args: [...scope.args, ...matchArgs, ...(b.id ? [b.id] : [])],
-  };
-}
-export async function findDuplicates(db, user, body) {
-  const selection = duplicateSelection(user, body);
-  if (!selection) return { items: [], total: 0 };
-  const [count, rows] = await db.batch([
-    db
-      .prepare(`SELECT COUNT(*) AS total FROM people WHERE ${selection.where}`)
-      .bind(...selection.args),
-    db
-      .prepare(
-        `SELECT * FROM people WHERE ${selection.where} ORDER BY CASE WHEN national_id=? THEN 0 ELSE 1 END,id LIMIT 5`,
-      )
-      .bind(...selection.args, body.nationalId || null),
-  ]);
-  return {
-    items: rows.results.map((row) => {
-      const p = JSON.parse(row.data);
-      return {
-        ...personListItem(row),
-        matchReason:
-          body.nationalId && row.national_id === body.nationalId
-            ? "nationalId"
-            : body.birth && p.birth === body.birth
-              ? "birth"
-              : "phone",
-      };
+import { duplicateReasons } from "../src/duplicate-person.js";
+import { peopleSelection, parsePeopleQuery } from "./people.js";
+export async function findDuplicates(db, user, person) {
+  const selection = peopleSelection(
+    user,
+    parsePeopleQuery(new URLSearchParams()),
+  );
+  const where = user.role === "admin" ? "1" : selection.where;
+  const rows = await db
+    .prepare(
+      `SELECT id,village,version,deleted_at,json_extract(data,'$.first') AS first,json_extract(data,'$.last') AS last,json_extract(data,'$.birth') AS birth,json_extract(data,'$.phone') AS phone,national_id AS nationalId FROM people WHERE ${where}`,
+    )
+    .bind(...selection.args)
+    .all();
+  const candidates = rows.results
+    .filter((row) => row.id !== person.id)
+    .map((row) => ({ ...row, reasons: duplicateReasons(person, row) }))
+    .filter((row) => row.reasons.length)
+    .sort(
+      (a, b) => b.reasons.length - a.reasons.length || a.id.localeCompare(b.id),
+    )
+    .slice(0, 10);
+  const bytes = new TextEncoder().encode(
+    JSON.stringify({
+      user: user.id,
+      first: person.first,
+      last: person.last,
+      birth: person.birth,
+      phone: person.phone,
+      nationalId: person.nationalId,
+      village: person.village,
+      candidates: candidates.map((c) => [c.id, c.version, c.deleted_at]),
     }),
-    total: count.results[0].total,
+  );
+  const token = Array.from(
+    new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)),
+    (b) => b.toString(16).padStart(2, "0"),
+  ).join("");
+  return {
+    token,
+    candidates: candidates.map(({ nationalId, phone, version, ...row }) => row),
   };
 }
