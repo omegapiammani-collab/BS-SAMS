@@ -166,3 +166,7 @@ PDF รายบุคคลต้องมีสิทธิ์ดูและ�
 ใช้ `npm run db:backup -- --remote` เพื่อสำรอง D1 และ `npm run db:verify-recovery -- --snapshot <path>` เพื่อตรวจการนำเข้าบน D1 local แยก พร้อมตรวจ schema ข้อมูลทุกตาราง และ SHA-256 ดู [คู่มือสำรองและกู้คืน](docs/operations.md) สำหรับวิธี API snapshot เมื่อดาวน์โหลด export ไม่ได้และขั้นตอนเพิกถอน session หลังการกู้คืน
 
 ใช้ `npm run test:performance` เพื่อวัดทะเบียน รายงาน และไฟล์ส่งออกกับข้อมูลจำลอง 1,000 และ 10,000 ราย ดู [วิธีวัดและผลประสิทธิภาพ](docs/performance.md) สำหรับการทดสอบ PDF ครบ 10,000 รายและข้อจำกัดของผลทดสอบ local
+
+## ตรวจเบราว์เซอร์และอุปกรณ์
+
+รัน `npm run test:compatibility` เพื่อตรวจจอเล็ก แท็บเล็ต และ browser zoom 200% ใน Chromium เพิ่ม Firefox ผ่านตัวเลือก binary และ geckodriver ได้ ผลจำลองไม่แทนการตรวจ Safari/iPhone หรือ Android แรมน้อยจริง ดู [ผลตรวจและรายการทดสอบบนอุปกรณ์](docs/device-qa.md)
