@@ -1143,7 +1143,7 @@ function PersonEditor({
                   ),
                 );
                 return (
-                  <details className="request-group" key={category} open>
+                  <details className="request-group" key={category}>
                     <summary>
                       {category}
                       <span>{requests.length} คำขอ</span>

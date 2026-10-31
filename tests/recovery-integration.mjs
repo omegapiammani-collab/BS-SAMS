@@ -228,6 +228,7 @@ try {
   await page.getByLabel("ชื่อ *", { exact: true }).fill("กู้คืนร่างทดสอบ");
   await page.getByLabel("นามสกุล *", { exact: true }).fill("ครบทุกรายการ");
   await page.getByLabel("วันเดือนปีเกิด", { exact: false }).fill("31/02/2569");
+  await page.locator(".request-group > summary").nth(0).click();
   await page
     .getByRole("button", { name: "เพิ่มคำขอ เงินสงเคราะห์", exact: true })
     .click();
@@ -279,6 +280,7 @@ try {
     "31/02/2569",
   );
   await page.getByLabel("วันเดือนปีเกิด", { exact: false }).fill("01/01/2533");
+  await page.locator(".request-group > summary").nth(0).click();
   await page
     .getByRole("button", { name: "ไปที่คำขอที่ 1", exact: true })
     .click();

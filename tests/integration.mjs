@@ -376,8 +376,10 @@ try {
 
     assert.equal(
       await page.getByRole("button", { name: /^เพิ่มคำขอ / }).count(),
-      7,
+      0,
     );
+    assert.equal(await page.locator(".request-group:not([open])").count(), 7);
+    await page.locator(".request-group > summary").nth(0).click();
     await page
       .getByRole("button", { name: "เพิ่มคำขอ เงินสงเคราะห์", exact: true })
       .click();
@@ -404,6 +406,7 @@ try {
       await page.getByLabel("หมวดหมู่", { exact: true }).inputValue(),
       "0",
     );
+    await page.locator(".request-group > summary").nth(1).click();
     await page
       .getByRole("button", { name: "เพิ่มคำขอ เงินซ่อมบ้าน", exact: true })
       .click();
@@ -584,6 +587,7 @@ try {
     );
     assert.equal(await page.locator(".request-card").count(), 0);
     assert.equal(await page.locator(".request-group").count(), 7);
+    await page.locator(".request-group > summary").nth(0).click();
     assert.ok(
       (await page.locator(".request-received-date").innerText()).includes(
         "ได้รับการช่วยเหลือ",
@@ -624,6 +628,7 @@ try {
     await page
       .getByRole("button", { name: "แก้ไข บุคคลทดสอบ", exact: true })
       .click();
+    await page.locator(".request-group > summary").nth(0).click();
     await page
       .getByRole("button", { name: "ไปที่คำขอที่ 1", exact: true })
       .click();
@@ -696,6 +701,7 @@ try {
       1,
     );
 
+    await page.locator(".request-group > summary").nth(0).click();
     await page
       .getByRole("button", { name: "ไปที่คำขอที่ 1", exact: true })
       .click();

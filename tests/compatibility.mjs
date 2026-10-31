@@ -227,6 +227,7 @@ try {
       await page
         .getByRole("button", { name: `แก้ไข ${first}`, exact: true })
         .click();
+      await page.locator(".request-group > summary").nth(0).click();
       await page
         .getByRole("button", { name: "ไปที่คำขอที่ 1", exact: true })
         .click();

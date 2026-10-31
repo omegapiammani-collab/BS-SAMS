@@ -189,6 +189,7 @@ export async function testFirefox({
       "Firefox registry failed",
     );
     await click('button[aria-label="แก้ไข ทดสอบอุปกรณ์0000"]');
+    await click(".request-group > summary");
     await click('button[aria-label="ไปที่คำขอที่ 1"]');
     await wait(
       () =>
