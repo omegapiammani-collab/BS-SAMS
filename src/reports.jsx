@@ -117,8 +117,8 @@ export function Dashboard({ config, range, refresh, onRegistry }) {
               className="donut"
               style={{
                 background: d.people
-                  ? `conic-gradient(#057855 0 ${(d.done / d.people) * 100}%,#ffa500 ${(d.done / d.people) * 100}% ${((d.done + d.partial) / d.people) * 100}%,#dce5ef ${((d.done + d.partial) / d.people) * 100}% 100%)`
-                  : "#e9eef4",
+                  ? `conic-gradient(var(--chart-success) 0 ${(d.done / d.people) * 100}%,var(--orange) ${(d.done / d.people) * 100}% ${((d.done + d.partial) / d.people) * 100}%,var(--chart-pending) ${((d.done + d.partial) / d.people) * 100}% 100%)`
+                  : "var(--chart-pending)",
               }}
             >
               <div>
@@ -128,10 +128,10 @@ export function Dashboard({ config, range, refresh, onRegistry }) {
             </div>
             <div className="legend">
               {[
-                ["#057855", "ช่วยเหลือครบแล้ว", d.done],
-                ["#ffa500", "ช่วยเหลือบางส่วน", d.partial],
+                ["var(--chart-success)", "ช่วยเหลือครบแล้ว", d.done],
+                ["var(--orange)", "ช่วยเหลือบางส่วน", d.partial],
                 [
-                  "#dce5ef",
+                  "var(--chart-pending)",
                   "รอดำเนินการ / ยุติคำขอ",
                   d.people - d.done - d.partial,
                 ],
