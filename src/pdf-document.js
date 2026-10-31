@@ -1,4 +1,8 @@
-export function pdfDocument(rows, title, { orientation = "landscape" } = {}) {
+export function pdfDocument(
+  rows,
+  title,
+  { orientation = "landscape", columnWeights } = {},
+) {
   const columns = Math.max(1, ...rows.map((row) => row.length));
   const groups = [];
   for (const row of rows.length ? rows : [["ไม่มีข้อมูล"]]) {
@@ -38,12 +42,20 @@ export function pdfDocument(rows, title, { orientation = "landscape" } = {}) {
             : columns > 6
               ? 1190.55
               : 841.89;
+        const weights = columnWeights ?? Array(count).fill(1);
+        const totalWeight = weights.reduce(
+          (total, weight) => total + weight,
+          0,
+        );
+        const availableWidth = pageWidth - 56 - count * 10;
         return {
           margin: [0, 0, 0, index === groups.length - 1 ? 0 : 12],
           layout: "lightHorizontalLines",
           table: {
             headerRows: 1,
-            widths: Array(count).fill((pageWidth - 56) / count - 10),
+            widths: weights.map(
+              (weight) => (availableWidth * weight) / totalWeight,
+            ),
             body: group.map((row, index) =>
               Array.from({ length: count }, (_, col) => ({
                 text: String(row[col] ?? ""),

@@ -24,7 +24,7 @@ test("registry PDF hides registry IDs and status and uses Buddhist birth dates",
   assert.ok(!rows[0].includes("เลขทะเบียน"));
   assert.ok(!rows[0].includes("สถานะ"));
   assert.equal(rows[1][4], "01/01/2533");
-  assert.equal(rows[1][8], "เงินสงเคราะห์, เงินซ่อมบ้าน");
+  assert.equal(rows[1][8], "เงินสงเคราะห์\nเงินซ่อมบ้าน");
   assert.ok(rows.every((row) => row.length === rows[0].length));
 });
 
@@ -33,7 +33,7 @@ test("registry PDF shows only the selected assistance category including categor
   assert.equal(registryPdfRows([person], { cat: "1" })[1][8], "เงินซ่อมบ้าน");
   assert.equal(
     registryPdfRows([person], { cat: "" })[1][8],
-    "เงินสงเคราะห์, เงินซ่อมบ้าน",
+    "เงินสงเคราะห์\nเงินซ่อมบ้าน",
   );
   assert.equal(
     registryPdfRows([{ ...person, birth: "", requests: [] }])[1][4],

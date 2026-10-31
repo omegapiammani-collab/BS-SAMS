@@ -4,7 +4,7 @@ import { DraftRecovery } from "./draft-recovery.jsx";
 import { useServerDraft } from "./use-server-draft.js";
 import { focusAndReveal } from "./form-focus.js";
 import { personExport } from "./person-export.js";
-import { registryPdfRows } from "./registry-export.js";
+import { registryPdfRows, registryPdfOptions } from "./registry-export.js";
 import { orderRequests } from "./request-order.js";
 import { formatThaiDate } from "./thai-date.js";
 import React, { useEffect, useState, useRef } from "react";
@@ -194,6 +194,7 @@ export function Registry({ user, config, refresh }) {
             ],
         f,
         "ทะเบียนผู้ประสบปัญหา",
+        f === "pdf" ? registryPdfOptions : undefined,
       );
     } catch (e) {
       setError(e.message);

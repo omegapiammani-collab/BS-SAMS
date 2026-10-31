@@ -1,5 +1,8 @@
 import { age, categories } from "./domain.js";
 import { formatThaiDate } from "./thai-date.js";
+export const registryPdfOptions = {
+  columnWeights: [0.6, 1, 1, 1.1, 0.9, 0.4, 0.4, 0.9, 2.3],
+};
 
 export function registryPdfRows(people, filters = {}) {
   return [
@@ -35,7 +38,7 @@ export function registryPdfRows(people, filters = {}) {
         age(person.birth),
         person.village,
         person.phone,
-        types.join(", ") || "ไม่ระบุ",
+        types.join("\n") || "ไม่ระบุ",
       ];
     }),
   ];
