@@ -24,6 +24,7 @@ import {
   validateReportRange,
   validatePerson,
   validatePersonUpdate,
+  completeAssistedRequests,
   removedPersonRecords,
 } from "../src/domain.js";
 import { hashPassword, verifyPassword, safeUser, allowed } from "./auth.js";
@@ -308,6 +309,7 @@ export default {
         const cleanup = draftCleanup(db, u, p);
         const err = validatePerson(p, cfg);
         if (err) return fail(err);
+        p.requests = completeAssistedRequests(p);
         if (!allowed(u, "create", p.village) || !allowed(u, "view", p.village))
           return fail("ไม่มีสิทธิ์ในหมู่บ้านนี้", 403);
         delete p.id;
@@ -436,6 +438,7 @@ export default {
             return fail("มีผู้แก้ไขข้อมูลแล้ว กรุณาโหลดใหม่", 409);
           const historyError = validatePersonUpdate(p, old);
           if (historyError) return fail(historyError);
+          p.requests = completeAssistedRequests(p, old);
           const removed = removedPersonRecords(p, old);
           if (
             (removed.requests.length || removed.payments.length) &&

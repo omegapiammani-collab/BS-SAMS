@@ -12,8 +12,31 @@ import {
   validatePersonUpdate,
   removedPersonRecords,
   defaultConfig,
+  completeAssistedRequests,
 } from "../src/domain.js";
 import { allowed, hashPassword, verifyPassword } from "../server/auth.js";
+test("saving new assistance completes only the affected request", () => {
+  const previous = {
+    requests: [
+      { id: "a", status: "progress", payments: [] },
+      { id: "b", status: "pending", payments: [] },
+      { id: "c", status: "cancelled", payments: [{ id: "saved" }] },
+    ],
+  };
+  const person = structuredClone(previous);
+  person.requests[0].payments.push({ id: "new" });
+  const result = completeAssistedRequests(person, previous);
+  assert.deepEqual(
+    result.map((request) => request.status),
+    ["done", "pending", "cancelled"],
+  );
+  assert.equal(person.requests[0].status, "progress");
+  assert.equal(completeAssistedRequests(person)[0].status, "done");
+  assert.equal(
+    completeAssistedRequests(previous, previous)[0].status,
+    "progress",
+  );
+});
 test("age respects birthday and leap day", () => {
   assert.equal(age("2000-11-01", "2026-10-30"), 25);
   assert.equal(age("2000-10-30", "2026-10-30"), 26);

@@ -442,6 +442,9 @@ try {
       .getByLabel("ประเภทความช่วยเหลือ *", { exact: true })
       .fill("เงินสงเคราะห์ทดสอบ");
     await page
+      .getByLabel("วันที่ยื่นคำขอ · พ.ศ.", { exact: true })
+      .fill("01/10/2569");
+    await page
       .getByRole("button", { name: "บันทึกการช่วยเหลือ", exact: true })
       .click();
     await page.getByLabel("หน่วยงานผู้ให้ *").fill("หน่วยงานทดสอบ");
@@ -466,6 +469,7 @@ try {
       .click();
     await page.getByLabel("หน่วยงานผู้ให้ *").fill("หน่วยงานทดสอบ");
     await page.getByLabel("จำนวนเงิน · บาท").fill("3000.30");
+    await page.getByLabel("วันที่ได้รับ", { exact: true }).fill("05/10/2569");
     assert.equal(
       await page
         .getByLabel("รายละเอียดความช่วยเหลือ")
@@ -473,7 +477,10 @@ try {
       false,
     );
     await page.getByText("3,000.30 บาท", { exact: true }).waitFor();
-    await page.getByLabel("สถานะ", { exact: true }).selectOption("done");
+    assert.equal(
+      await page.getByLabel("สถานะ", { exact: true }).inputValue(),
+      "pending",
+    );
     await page
       .getByRole("button", { name: "บันทึกข้อมูล", exact: true })
       .click();
@@ -481,6 +488,7 @@ try {
     await page.getByText("บุคคลทดสอบ ระบบ", { exact: false }).first().waitFor();
     const people = (await call("/people")).data.items;
     const p = people.find((p) => p.first === "บุคคลทดสอบ");
+    assert.equal(p.requests[0].status, "done");
     personId = p.id;
     assert.equal(p.birth, "1990-01-01");
     assert.equal(p.requests[0].payments[0].amount, "3000.30");

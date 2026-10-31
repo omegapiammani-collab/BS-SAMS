@@ -44,6 +44,15 @@ export const statuses = {
   cancelled: "ผู้ยื่นยกเลิก",
   referred: "ส่งต่อหน่วยงานอื่น",
 };
+export function completeAssistedRequests(person, previous = { requests: [] }) {
+  return person.requests.map((request) => {
+    const saved = previous.requests.find((item) => item.id === request.id);
+    const savedPayments = new Set(saved?.payments.map((item) => item.id));
+    return request.payments.some((payment) => !savedPayments.has(payment.id))
+      ? { ...request, status: "done" }
+      : request;
+  });
+}
 export const requestReasonLabel = (status) =>
   status === "rejected"
     ? "เหตุผลที่ไม่อนุมัติ"
