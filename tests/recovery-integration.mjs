@@ -235,6 +235,22 @@ try {
   await page
     .getByLabel("ประเภทความช่วยเหลือ *", { exact: true })
     .fill("คำขอในร่าง");
+  const requestStatus = page.getByLabel("สถานะ", { exact: true });
+  assert.equal(
+    await requestStatus.locator('option[value="referred"]').count(),
+    0,
+  );
+  for (const [status, label] of [
+    ["rejected", "เหตุผลที่ไม่อนุมัติ"],
+    ["cancelled", "เหตุผลที่ยกเลิก"],
+  ]) {
+    await requestStatus.selectOption(status);
+    const reason = page.getByLabel(label, { exact: true });
+    assert.equal(await reason.getAttribute("required"), null);
+    assert.equal(await reason.inputValue(), "");
+  }
+  await page.screenshot({ path: "/tmp/bs-sams-optional-request-reason.png" });
+  await requestStatus.selectOption("pending");
   await page.getByText(/เก็บร่างล่าสุดแล้ว เวลา/).waitFor();
   const drafts = (await call(context, "/drafts")).data.items;
   const uiDraft = drafts.find((x) => x.first === "กู้คืนร่างทดสอบ");

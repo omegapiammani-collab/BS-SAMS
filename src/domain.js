@@ -44,6 +44,12 @@ export const statuses = {
   cancelled: "ผู้ยื่นยกเลิก",
   referred: "ส่งต่อหน่วยงานอื่น",
 };
+export const requestReasonLabel = (status) =>
+  status === "rejected"
+    ? "เหตุผลที่ไม่อนุมัติ"
+    : status === "cancelled"
+      ? "เหตุผลที่ยกเลิก"
+      : "เหตุผลยุติคำขอ";
 export const closed = ["rejected", "cancelled", "referred"];
 export const permissions = ["view", "create", "edit", "delete", "export"];
 export const permissionLabels = [
@@ -281,6 +287,10 @@ export function validatePersonIssue(
     if (
       !/^[0-6]$/.test(String(r.category)) ||
       !Object.hasOwn(statuses, r.status) ||
+      (r.status === "referred" &&
+        !previous?.requests?.some(
+          (old) => old.id === r.id && old.status === "referred",
+        )) ||
       !isDate(r.date) ||
       typeof r.type !== "string" ||
       !r.type.trim()
@@ -294,12 +304,9 @@ export function validatePersonIssue(
         message: "วันที่ยื่นคำขอต้องไม่อยู่ในอนาคตหรือก่อนวันเกิด",
         field: `requests.${r.id}.date`,
       };
-    if (
-      closed.includes(r.status) &&
-      (typeof r.reason !== "string" || !r.reason.trim())
-    )
+    if (r.reason !== undefined && typeof r.reason !== "string")
       return {
-        message: "กรุณาระบุเหตุผลยุติคำขอ",
+        message: "รูปแบบเหตุผลไม่ถูกต้อง",
         field: `requests.${r.id}.reason`,
       };
     if (!Array.isArray(r.payments) || r.payments.length > 200)

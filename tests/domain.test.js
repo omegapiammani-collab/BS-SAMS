@@ -69,7 +69,7 @@ test("password hashes are salted and verify", async () => {
   assert.ok(await verifyPassword("correct-password", a));
   assert.equal(await verifyPassword("wrong", a), false);
 });
-test("request closure needs a reason and completion needs assistance", () => {
+test("closed request reasons are optional and completion needs assistance", () => {
   const p = {
     first: "ตัวอย่าง",
     last: "ทดสอบ",
@@ -77,6 +77,7 @@ test("request closure needs a reason and completion needs assistance", () => {
     disabilities: [],
     requests: [
       {
+        id: "optional-reason-request",
         category: "0",
         type: "สงเคราะห์",
         date: "2026-10-01",
@@ -85,7 +86,15 @@ test("request closure needs a reason and completion needs assistance", () => {
       },
     ],
   };
-  assert.match(validatePerson(p, defaultConfig), /เหตุผล/);
+  assert.equal(validatePerson(p, defaultConfig), null);
+  p.requests[0].status = "cancelled";
+  assert.equal(validatePerson(p, defaultConfig), null);
+  p.requests[0].status = "referred";
+  assert.match(validatePerson(p, defaultConfig), /สถานะ/);
+  assert.equal(
+    validatePerson(p, defaultConfig, undefined, structuredClone(p)),
+    null,
+  );
   p.requests[0].status = "done";
   assert.match(validatePerson(p, defaultConfig), /บันทึกการช่วยเหลือ/);
 });

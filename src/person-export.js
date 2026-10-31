@@ -4,6 +4,7 @@ import {
   personLabels,
   personStatus,
   statuses,
+  requestReasonLabel,
 } from "./domain.js";
 import { formatThaiDate } from "./thai-date.js";
 import { formatMoney, sumMoney, thailandDate } from "./money.js";
@@ -52,7 +53,7 @@ export function personExport(person, config) {
       ["วันที่ยื่นคำขอ", formatThaiDate(request.date)],
       ["สถานะคำขอ", statuses[request.status]],
       ["สภาพปัญหาและรายละเอียดคำขอ", request.note || "ไม่ระบุ"],
-      ["เหตุผลยุติคำขอ", request.reason || "ไม่ระบุ"],
+      [requestReasonLabel(request.status), request.reason || "ไม่ระบุ"],
     );
     if (!request.payments.length)
       rows.push(["ประวัติการช่วยเหลือ", "ยังไม่มีการช่วยเหลือ"]);

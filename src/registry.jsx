@@ -31,6 +31,7 @@ import {
   categories,
   disabilities,
   statuses,
+  requestReasonLabel,
   closed,
   personStatus,
   personLabels,
@@ -1371,11 +1372,18 @@ function PersonEditor({
                           changeRequest(r.id, "status", e.target.value)
                         }
                       >
-                        {Object.entries(statuses).map(([s, l]) => (
-                          <option key={s} value={s}>
-                            {l}
+                        {r.status === "referred" && (
+                          <option value="referred" disabled>
+                            ส่งต่อหน่วยงานอื่น (สถานะเดิม)
                           </option>
-                        ))}
+                        )}
+                        {Object.entries(statuses)
+                          .filter(([s]) => s !== "referred")
+                          .map(([s, l]) => (
+                            <option key={s} value={s}>
+                              {l}
+                            </option>
+                          ))}
                       </Select>
                     </div>
                     <Field label="บันทึกสภาพปัญหาและรายละเอียดคำขอ">
@@ -1388,13 +1396,12 @@ function PersonEditor({
                     </Field>
                     {closed.includes(r.status) && (
                       <Field
-                        label="เหตุผลยุติคำขอ *"
+                        label={requestReasonLabel(r.status)}
                         error={fieldError(`requests.${r.id}.reason`)}
                       >
                         <textarea
                           data-field={`requests.${r.id}.reason`}
-                          value={r.reason}
-                          required
+                          value={r.reason || ""}
                           onChange={(e) =>
                             changeRequest(r.id, "reason", e.target.value)
                           }
