@@ -9,8 +9,31 @@ import {
   validatePerson,
   validatePersonUpdate,
   defaultConfig,
+  completeRequestsWithNewPayments,
 } from "../src/domain.js";
 import { allowed, hashPassword, verifyPassword } from "../server/auth.js";
+test("new assistance completes only its request when saving", () => {
+  const previous = {
+    requests: [
+      { id: "a", status: "progress", payments: [{ id: "old" }] },
+      { id: "b", status: "pending", payments: [] },
+    ],
+  };
+  const edited = structuredClone(previous);
+  edited.requests[0].payments.push({ id: "new" });
+  const result = completeRequestsWithNewPayments(edited, previous);
+  assert.equal(result.requests[0].status, "done");
+  assert.equal(result.requests[1].status, "pending");
+  assert.equal(edited.requests[0].status, "progress");
+  assert.equal(
+    completeRequestsWithNewPayments(previous, previous).requests[0].status,
+    "progress",
+  );
+  assert.equal(
+    completeRequestsWithNewPayments(edited).requests[0].status,
+    "done",
+  );
+});
 test("age respects birthday and leap day", () => {
   assert.equal(age("2000-11-01", "2026-10-30"), 25);
   assert.equal(age("2000-10-30", "2026-10-30"), 26);

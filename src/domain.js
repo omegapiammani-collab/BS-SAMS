@@ -45,6 +45,24 @@ export const statuses = {
   referred: "ส่งต่อหน่วยงานอื่น",
 };
 export const closed = ["rejected", "cancelled", "referred"];
+export function completeRequestsWithNewPayments(
+  person,
+  previous = { requests: [] },
+) {
+  return {
+    ...person,
+    requests: person.requests.map((request) => {
+      const saved = new Set(
+        (
+          previous.requests.find((r) => r.id === request.id)?.payments ?? []
+        ).map((payment) => payment.id),
+      );
+      return request.payments.some((payment) => !saved.has(payment.id))
+        ? { ...request, status: "done" }
+        : request;
+    }),
+  };
+}
 export const permissions = ["view", "create", "edit", "delete", "export"];
 export const permissionLabels = [
   "ดูข้อมูล",

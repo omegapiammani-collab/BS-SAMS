@@ -20,6 +20,7 @@ import {
   validateReportRange,
   validatePerson,
   validatePersonUpdate,
+  completeRequestsWithNewPayments,
 } from "../src/domain.js";
 import { hashPassword, verifyPassword, safeUser, allowed } from "./auth.js";
 const json = (data, status = 200, headers = {}) =>
@@ -244,6 +245,7 @@ export default {
         p.village = Number(p.village);
         const err = validatePerson(p, cfg);
         if (err) return fail(err);
+        p.requests = completeRequestsWithNewPayments(p).requests;
         if (!cfg.villages.some((v) => v.id === p.village && v.active))
           return fail(
             "หมู่บ้านนี้ปิดใช้งานแล้ว กรุณาเลือกหมู่บ้านที่เปิดใช้งาน",
@@ -383,6 +385,7 @@ export default {
             return fail("มีผู้แก้ไขข้อมูลแล้ว กรุณาโหลดใหม่", 409);
           const historyError = validatePersonUpdate(p, old);
           if (historyError) return fail(historyError);
+          p.requests = completeRequestsWithNewPayments(p, old).requests;
           const result = await db.batch([
             db
               .prepare(

@@ -221,7 +221,10 @@ try {
         .fill("ทดสอบยอดสตางค์");
     }
     await page.getByText("3,000.30 บาท", { exact: true }).waitFor();
-    await page.getByLabel("สถานะ", { exact: true }).selectOption("done");
+    assert.equal(
+      await page.getByLabel("สถานะ", { exact: true }).inputValue(),
+      "pending",
+    );
     await page
       .getByRole("button", { name: "บันทึกข้อมูล", exact: true })
       .click();
@@ -230,6 +233,7 @@ try {
     const people = (await call("/people")).data.items;
     const listPerson = people.find((p) => p.first === "บุคคลทดสอบ");
     const p = (await call("/people/" + listPerson.id)).data;
+    assert.equal(p.requests[0].status, "done");
     await page.getByText("ตัวกรองเพิ่มเติม", { exact: true }).click();
     await page
       .getByLabel("ประเภทความช่วยเหลือ", { exact: true })
