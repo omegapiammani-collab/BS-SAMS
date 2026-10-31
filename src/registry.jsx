@@ -1,3 +1,4 @@
+import { categoryColors } from "./category-colors.js";
 import { DateDraftContext } from "./date-draft-context.js";
 import { DraftRecovery } from "./draft-recovery.jsx";
 import { useServerDraft } from "./use-server-draft.js";
@@ -1143,7 +1144,13 @@ function PersonEditor({
                   ),
                 );
                 return (
-                  <details className="request-group" key={category}>
+                  <details
+                    className="request-group"
+                    key={category}
+                    style={{
+                      "--category-accent": categoryColors[categoryIndex],
+                    }}
+                  >
                     <summary>
                       {category}
                       <span>{requests.length} คำขอ</span>

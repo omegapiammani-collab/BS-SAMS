@@ -1,3 +1,4 @@
+import { categoryColors } from "./category-colors.js";
 import { reportExport } from "./report-export.js";
 import React, { useEffect, useRef, useState } from "react";
 import {
@@ -94,15 +95,7 @@ export function Dashboard({ config, range, refresh, onRegistry }) {
                       width: d.category[i]
                         ? `${Math.max(3, (d.category[i] / Math.max(...d.category, 1)) * 100)}%`
                         : "0%",
-                      background: [
-                        "#004eaf",
-                        "#ffa500",
-                        "#057855",
-                        "#5c82bf",
-                        "#78b6ae",
-                        "#939bc5",
-                        "#a2acbb",
-                      ][i],
+                      background: categoryColors[i],
                     }}
                   />
                 </div>
