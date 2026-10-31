@@ -95,7 +95,7 @@ export const defaultConfig = {
           : [],
   })),
 };
-export function age(birth, at = new Date().toISOString().slice(0, 10)) {
+export function age(birth, at = thailandDate()) {
   if (!birth) return null;
   const b = new Date(birth + "T00:00:00Z"),
     d = new Date(at + "T00:00:00Z");
@@ -109,7 +109,8 @@ export function age(birth, at = new Date().toISOString().slice(0, 10)) {
   );
 }
 export function fiscalYear(date = new Date()) {
-  return date.getFullYear() + 543 + (date.getMonth() >= 9 ? 1 : 0);
+  const [year, month] = thailandDate(date).split("-").map(Number);
+  return year + 543 + (month >= 10 ? 1 : 0);
 }
 export function fiscalRange(year) {
   return [`${year - 544}-10-01`, `${year - 543}-09-30`];

@@ -4,6 +4,7 @@ import {
   age,
   validNationalId,
   fiscalRange,
+  fiscalYear,
   personStatus,
   summarize,
   validateReportRange,
@@ -15,6 +16,20 @@ import {
   completeAssistedRequests,
 } from "../src/domain.js";
 import { allowed, hashPassword, verifyPassword } from "../server/auth.js";
+test("default age advances at midnight in Thailand", (t) => {
+  t.mock.timers.enable({
+    apis: ["Date"],
+    now: new Date("2026-10-31T16:59:59Z"),
+  });
+  assert.equal(age("2000-11-01"), 25);
+  t.mock.timers.tick(1000);
+  assert.equal(age("2000-11-01"), 26);
+});
+test("fiscal year advances on October 1 in Thailand regardless of host timezone", () => {
+  assert.equal(fiscalYear(new Date("2026-09-30T16:59:59Z")), 2569);
+  assert.equal(fiscalYear(new Date("2026-09-30T17:00:00Z")), 2570);
+  assert.equal(fiscalYear(new Date("2026-12-31T17:00:00Z")), 2570);
+});
 test("saving new assistance completes only the affected request", () => {
   const previous = {
     requests: [
