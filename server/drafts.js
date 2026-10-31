@@ -231,9 +231,23 @@ export async function saveDraft(db, user, id, body) {
   }
   if (!result.meta.changes) {
     const existing = await db
-      .prepare("SELECT id FROM person_drafts WHERE user_id=? AND id=?")
+      .prepare("SELECT * FROM person_drafts WHERE user_id=? AND id=?")
       .bind(user.id, id)
       .first();
+    // Retrying a committed write after its response was lost is not a conflict.
+    if (
+      existing &&
+      existing.version === body.version + 1 &&
+      existing.person_id === personId &&
+      existing.base_version === (personId ? p.version : null) &&
+      existing.data === JSON.stringify(p)
+    )
+      return {
+        id,
+        version: existing.version,
+        updatedAt: existing.updated_at,
+        expiresAt: existing.expires_at,
+      };
     if (body.version > 0 && !existing)
       throw new DraftError("ร่างหมดอายุแล้ว", 410);
     throw new DraftError(

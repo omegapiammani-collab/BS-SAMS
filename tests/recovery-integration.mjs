@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { chromium } from "@playwright/test";
+import { chromium, expect } from "@playwright/test";
 import { localFixture, startWorker } from "../scripts/local-fixture.mjs";
 import { hashPassword } from "../server/auth.js";
 import { randomUUID } from "node:crypto";
@@ -106,6 +106,13 @@ try {
     data: { ...original, first: "ข้อความร่าง" },
   });
   assert.equal(saved.status, 200);
+  // A lost successful response must be safe to retry without advancing the version.
+  const retriedCreate = await call(context, "/drafts/" + draftId, "PUT", {
+    version: 0,
+    data: { ...original, first: "ข้อความร่าง" },
+  });
+  assert.equal(retriedCreate.status, 200);
+  assert.deepEqual(retriedCreate.data, saved.data);
   assert.equal((await call(other, "/drafts/" + draftId)).status, 410);
   assert.equal((await call(other, "/drafts")).data.items.length, 0);
   assert.equal(
@@ -126,6 +133,12 @@ try {
     ).status,
     200,
   );
+  const retriedUpdate = await call(context, "/drafts/" + draftId, "PUT", {
+    version: 1,
+    data: { ...original, first: "ร่างใหม่" },
+  });
+  assert.equal(retriedUpdate.status, 200);
+  assert.equal(retriedUpdate.data.version, 2);
   assert.equal(
     (await call(context, "/drafts/" + draftId, "DELETE", { version: 1 }))
       .status,
@@ -321,6 +334,65 @@ try {
     .getByRole("dialog", { name: "เพิ่มผู้ประสบปัญหาทางสังคม", exact: true })
     .waitFor({ state: "hidden" });
   assert.equal((await call(context, "/drafts/" + discardId)).status, 410);
+  // Simulate a response lost after D1 commits, then edit again and retry/discard.
+  let loseResponse = true;
+  await page.route("**/api/drafts/*", async (route) => {
+    if (route.request().method() === "PUT" && loseResponse) {
+      loseResponse = false;
+      const response = await route.fetch();
+      assert.equal(response.status(), 200);
+      await route.abort("failed");
+    } else await route.continue();
+  });
+  await page
+    .getByRole("button", { name: "เพิ่มผู้ประสบปัญหา", exact: true })
+    .click();
+  for (const [field, hint] of [
+    ["ชื่อ *", "section-beneficiary given-name"],
+    ["นามสกุล *", "section-beneficiary family-name"],
+    ["โทรศัพท์มือถือ", "section-beneficiary mobile tel"],
+    ["เลขบัตรประชาชน · ไม่บังคับ", "off"],
+  ])
+    assert.equal(
+      await page
+        .getByLabel(field, { exact: true })
+        .getAttribute("autocomplete"),
+      hint,
+    );
+  await page.getByLabel("ชื่อ *", { exact: true }).fill("เครือข่ายขาดครั้งแรก");
+  await page.getByText(/ยังเก็บร่างไม่สำเร็จ/).waitFor();
+  await page
+    .getByLabel("ชื่อ *", { exact: true })
+    .fill("แก้ต่อหลังเครือข่ายขาด");
+  await page.getByText(/เก็บร่างล่าสุดแล้ว เวลา/).waitFor();
+  const retriedDraftId = (await call(context, "/drafts")).data.items.find(
+    (x) => x.first === "แก้ต่อหลังเครือข่ายขาด",
+  ).id;
+  loseResponse = true;
+  await page.getByLabel("นามสกุล *", { exact: true }).fill("ลองซ้ำหลังแก้ร่าง");
+  await page.getByText(/ยังเก็บร่างไม่สำเร็จ/).waitFor();
+  await page
+    .getByRole("button", { name: "ลองเก็บร่างอีกครั้ง", exact: true })
+    .click();
+  await page.getByText(/เก็บร่างล่าสุดแล้ว เวลา/).waitFor();
+  assert.equal(
+    (await call(context, "/drafts/" + retriedDraftId)).data.data.last,
+    "ลองซ้ำหลังแก้ร่าง",
+  );
+  loseResponse = true;
+  await page
+    .getByLabel("นามสกุล *", { exact: true })
+    .fill("ละทิ้งหลังขาดการเชื่อมต่อ");
+  await page.getByText(/ยังเก็บร่างไม่สำเร็จ/).waitFor();
+  await page.getByRole("button", { name: "ยกเลิก", exact: true }).click();
+  await page
+    .getByRole("button", { name: "ละทิ้งการเปลี่ยนแปลง", exact: true })
+    .click();
+  await page
+    .getByRole("dialog", { name: "เพิ่มผู้ประสบปัญหาทางสังคม", exact: true })
+    .waitFor({ state: "hidden" });
+  assert.equal((await call(context, "/drafts/" + retriedDraftId)).status, 410);
+  await page.unroute("**/api/drafts/*");
   const conflictId = randomUUID();
   await call(context, "/drafts/" + conflictId, "PUT", {
     version: 0,
@@ -385,8 +457,31 @@ try {
     await page.getByLabel("ชื่อ *", { exact: true }).inputValue(),
     "ชื่อในทะเบียนล่าสุด",
   );
+  // Returning all fields to their original values must also update the stored draft.
+  await page.getByLabel("ชื่อ *", { exact: true }).fill("ลองย้อนค่าร่าง");
+  await expect
+    .poll(
+      async () =>
+        (await call(context, "/drafts")).data.items.some(
+          (x) => x.first === "ลองย้อนค่าร่าง",
+        ),
+      { timeout: 5000 },
+    )
+    .toBe(true);
+  const revertedDraftId = (await call(context, "/drafts")).data.items.find(
+    (x) => x.first === "ลองย้อนค่าร่าง",
+  ).id;
+  await page.getByLabel("ชื่อ *", { exact: true }).fill("ชื่อในทะเบียนล่าสุด");
+  await expect
+    .poll(
+      async () =>
+        (await call(context, "/drafts/" + revertedDraftId)).data.data.first,
+      { timeout: 5000 },
+    )
+    .toBe("ชื่อในทะเบียนล่าสุด");
   await page.getByRole("button", { name: "ยกเลิก", exact: true }).click();
   await page.getByRole("dialog").waitFor({ state: "hidden" });
+  assert.equal((await call(context, "/drafts/" + revertedDraftId)).status, 410);
   assert.equal((await call(context, "/drafts/" + conflictId)).status, 200);
   await page
     .locator(".draft-row")
@@ -398,7 +493,7 @@ try {
   assert.equal((await call(context, "/drafts/" + conflictId)).status, 410);
   assert.deepEqual(errors, []);
   console.log(
-    "PASS: duplicate review/acknowledgement, scoped candidates, private drafts, expiry, permissions, CAS conflicts, purge cleanup, browser reload recovery including invalid dates, successful-save cleanup, no browser PII storage",
+    "PASS: duplicate review/acknowledgement, scoped candidates, private drafts, expiry, permissions, CAS conflicts, purge cleanup, browser reload recovery including invalid dates, successful-save cleanup, lost-response retries and discard, semantic autofill, no browser PII storage",
   );
   await reopened.close();
   await context.close();

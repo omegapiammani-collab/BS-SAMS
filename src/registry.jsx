@@ -748,7 +748,6 @@ function PersonEditor({
   const dirty = !readonly && JSON.stringify(p) !== original.current;
   useUnsavedChanges(dirty);
   const draft = useServerDraft({
-    person,
     data: p,
     dirty,
     readonly,
