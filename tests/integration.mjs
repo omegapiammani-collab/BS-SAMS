@@ -829,6 +829,11 @@ try {
       { encoding: "utf8" },
     ).replace(/\s/g, "");
     assert.ok(registryPdfText.includes("บุคคลทดสอบ"));
+    assert.ok(registryPdfText.includes("01/01/2533"));
+    assert.ok(registryPdfText.includes("ประเภทความช่วยเหลือ"));
+    assert.ok(!registryPdfText.includes("เลขทะเบียน"));
+    assert.ok(!registryPdfText.includes("สถานะ"));
+    assert.ok(!registryPdfText.includes(p.id));
 
     assert.equal(book.worksheets[0].getRow(2).getCell(3).value, "บุคคลทดสอบ");
     assert.equal(

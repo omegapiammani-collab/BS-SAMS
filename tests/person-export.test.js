@@ -40,6 +40,8 @@ test("individual PDF contains identity, every request and assistance, and Thai d
   };
   const rows = personExport(person, { villages: [{ id: 1, name: "ทดสอบ" }] });
   const text = JSON.stringify(rows);
+  assert.ok(!text.includes("เลขทะเบียน"));
+  assert.ok(!rows.some((row) => row.includes(person.id)));
   for (const value of [
     "นายทดสอบ รายบุคคล",
     "01/01/2533",

@@ -4,6 +4,7 @@ import { DraftRecovery } from "./draft-recovery.jsx";
 import { useServerDraft } from "./use-server-draft.js";
 import { focusAndReveal } from "./form-focus.js";
 import { personExport } from "./person-export.js";
+import { registryPdfRows } from "./registry-export.js";
 import { orderRequests } from "./request-order.js";
 import { formatThaiDate } from "./thai-date.js";
 import React, { useEffect, useState, useRef } from "react";
@@ -163,32 +164,34 @@ export function Registry({ user, config, refresh }) {
         filters: { ...filters, sort, direction: ascending ? "asc" : "desc" },
       });
       await downloadRows(
-        [
-          [
-            "เลขทะเบียน",
-            "คำนำหน้า",
-            "ชื่อ",
-            "นามสกุล",
-            "เลขบัตรประชาชน",
-            "วันเกิด",
-            "อายุ",
-            "หมู่ที่",
-            "โทรศัพท์",
-            "สถานะ",
-          ],
-          ...list.map((p) => [
-            p.id,
-            p.title,
-            p.first,
-            p.last,
-            p.nationalId,
-            p.birth,
-            age(p.birth),
-            p.village,
-            p.phone,
-            personLabels[personStatus(p)],
-          ]),
-        ],
+        f === "pdf"
+          ? registryPdfRows(list, filters)
+          : [
+              [
+                "เลขทะเบียน",
+                "คำนำหน้า",
+                "ชื่อ",
+                "นามสกุล",
+                "เลขบัตรประชาชน",
+                "วันเกิด",
+                "อายุ",
+                "หมู่ที่",
+                "โทรศัพท์",
+                "สถานะ",
+              ],
+              ...list.map((p) => [
+                p.id,
+                p.title,
+                p.first,
+                p.last,
+                p.nationalId,
+                p.birth,
+                age(p.birth),
+                p.village,
+                p.phone,
+                personLabels[personStatus(p)],
+              ]),
+            ],
         f,
         "ทะเบียนผู้ประสบปัญหา",
       );

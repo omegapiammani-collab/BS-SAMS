@@ -13,7 +13,6 @@ export function personExport(person, config) {
   const village = config.villages.find((v) => v.id === Number(person.village));
   const rows = [
     ["ข้อมูลผู้ประสบปัญหา", "รายละเอียด"],
-    ["เลขทะเบียน", person.id],
     ["ชื่อ–นามสกุล", `${person.title || ""}${person.first} ${person.last}`],
     ["เลขบัตรประชาชน", person.nationalId || "ไม่ระบุ"],
     ["วันเกิด", formatThaiDate(person.birth) || "ไม่ระบุ"],
