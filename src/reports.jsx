@@ -103,9 +103,6 @@ export function Dashboard({ config, range, refresh, onRegistry }) {
               </div>
             ))}
           </div>
-          <p className="panel-note">
-            คนเดียวอาจอยู่ได้หลายประเภท จึงไม่ควรรวมเป็นจำนวนคนทั้งหมด
-          </p>
         </section>
         <section className="panel">
           <div className="panel-title">
