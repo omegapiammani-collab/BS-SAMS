@@ -11,7 +11,7 @@ import {
 import { api } from "./api";
 import { formatMoney } from "./money";
 import { categories, monthLabel, validateReportRange } from "./domain";
-import { Field, ErrorBox, Empty } from "./ui";
+import { TableScroll, Field, ErrorBox, Empty } from "./ui";
 const n = (x) => Number(x || 0).toLocaleString("th-TH");
 function useSummary(range, refresh) {
   const [data, setData] = useState(null),
@@ -460,7 +460,7 @@ export function Reports({ user, config, range, setRange }) {
           </h2>
           {exportButtons("summary")}
         </div>
-        <div className="table-scroll">
+        <TableScroll aria-label="ตารางรายงานสรุป">
           <table>
             <thead>
               <tr>
@@ -477,7 +477,7 @@ export function Reports({ user, config, range, setRange }) {
               ))}
             </tbody>
           </table>
-        </div>
+        </TableScroll>
       </section>
       {d && (
         <section className="panel">
@@ -490,7 +490,7 @@ export function Reports({ user, config, range, setRange }) {
             การรวมรายเดือนอาจมากกว่ายอดคนทั้งช่วงวันที่
             ผู้ได้รับความช่วยเหลืออาจยื่นคำขอก่อนช่วงวันที่นี้
           </p>
-          <div className="table-scroll">
+          <TableScroll aria-label="ตารางรายละเอียดรายเดือน">
             <table>
               <thead>
                 <tr>
@@ -515,7 +515,7 @@ export function Reports({ user, config, range, setRange }) {
                 ))}
               </tbody>
             </table>
-          </div>
+          </TableScroll>
         </section>
       )}
     </>

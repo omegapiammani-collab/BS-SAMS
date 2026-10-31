@@ -105,8 +105,10 @@ export function ThaiDateInput({
           inputMode="numeric"
           placeholder="วว/ดด/ปปปป พ.ศ."
           value={draft}
-          aria-describedby={`${id}-date-help`}
-          aria-invalid={!!error}
+          aria-describedby={[props["aria-describedby"], `${id}-date-help`]
+            .filter(Boolean)
+            .join(" ")}
+          aria-invalid={!!error || props["aria-invalid"]}
           onClick={openCalendar}
           onKeyDown={(event) => {
             if (event.key === "ArrowDown" && event.altKey) {

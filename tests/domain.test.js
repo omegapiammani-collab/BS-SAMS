@@ -8,6 +8,7 @@ import {
   summarize,
   validateReportRange,
   validatePerson,
+  validatePersonIssue,
   validatePersonUpdate,
   removedPersonRecords,
   defaultConfig,
@@ -327,4 +328,61 @@ test("national ID requires exactly 13 ASCII digits and a valid check digit", () 
     null,
   ])
     assert.equal(validNationalId(value), false);
+});
+
+test("person validation identifies fields across hidden requests and assistance", () => {
+  const person = {
+    first: "ทดสอบ",
+    last: "ระบบ",
+    village: 1,
+    disabilities: [],
+    requests: [],
+  };
+  assert.equal(
+    validatePersonIssue(
+      { ...person, nationalId: "1234567890122" },
+      defaultConfig,
+    ).field,
+    "nationalId",
+  );
+  const request = {
+    id: "request-a",
+    category: "0",
+    type: "",
+    date: "2026-10-01",
+    status: "pending",
+    payments: [],
+  };
+  const invalidRequest = { ...person, requests: [request] };
+  const issue = validatePersonIssue(
+    invalidRequest,
+    defaultConfig,
+    "2026-10-31",
+  );
+  assert.equal(issue.field, "requests.request-a.type");
+  assert.equal(
+    issue.message,
+    validatePerson(invalidRequest, defaultConfig, "2026-10-31"),
+  );
+  request.type = "เงินสงเคราะห์";
+  request.payments = [
+    {
+      id: "payment-a",
+      date: "2026-10-02",
+      provider: "หน่วยงานทดสอบ",
+      amount: 100,
+      quantity: 1,
+      unit: "",
+      detail: "",
+    },
+  ];
+  assert.equal(
+    validatePersonIssue(invalidRequest, defaultConfig, "2026-10-31").field,
+    "requests.request-a.payments.payment-a.unit",
+  );
+  request.payments[0].unit = "ชิ้น";
+  assert.equal(
+    validatePersonIssue(invalidRequest, defaultConfig, "2026-10-31"),
+    null,
+  );
 });

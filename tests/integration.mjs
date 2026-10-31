@@ -252,6 +252,26 @@ try {
     await page
       .getByRole("button", { name: "เพิ่มผู้ประสบปัญหา", exact: true })
       .click();
+    await page
+      .getByRole("button", { name: "บันทึกข้อมูล", exact: true })
+      .click();
+    assert.equal(
+      await page
+        .getByLabel("ชื่อ *", { exact: true })
+        .evaluate((el) => el === document.activeElement),
+      true,
+    );
+    assert.equal(
+      await page
+        .getByLabel("ชื่อ *", { exact: true })
+        .getAttribute("aria-invalid"),
+      "true",
+    );
+    await page
+      .getByLabel("ชื่อ *", { exact: true })
+      .locator("..")
+      .getByText("กรุณากรอกข้อมูลช่องนี้", { exact: true })
+      .waitFor();
     const nationalIdInput = page.getByLabel("เลขบัตรประชาชน · ไม่บังคับ");
     await nationalIdInput.pressSequentially("123456789012199");
     assert.equal(await nationalIdInput.inputValue(), "1234567890121");
@@ -268,6 +288,19 @@ try {
     );
     await page.getByLabel("ชื่อ *", { exact: true }).fill("บุคคลทดสอบ");
     await page.getByLabel("นามสกุล *", { exact: true }).fill("ระบบ");
+    await nationalIdInput.fill("1234567890122");
+    await page
+      .getByRole("button", { name: "บันทึกข้อมูล", exact: true })
+      .click();
+    await page.waitForFunction(
+      () => document.activeElement?.dataset.field === "nationalId",
+    );
+    await nationalIdInput
+      .locator("..")
+      .getByText("เลขบัตรประชาชนไม่ถูกต้อง", { exact: true })
+      .waitFor();
+    await nationalIdInput.fill("");
+
     await page.getByLabel("วันเดือนปีเกิด").click();
     const calendar = page.getByRole("dialog", {
       name: "เลือกวันที่ พ.ศ.",
@@ -348,6 +381,21 @@ try {
     await page
       .getByRole("button", { name: "เพิ่มคำขอ เงินสงเคราะห์", exact: true })
       .click();
+    await page
+      .getByRole("button", { name: "กลับไปสรุปคำขอ", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "บันทึกข้อมูล", exact: true })
+      .click();
+    await page.waitForFunction(() =>
+      document.activeElement?.dataset.field?.endsWith(".type"),
+    );
+    await page
+      .getByLabel("ประเภทความช่วยเหลือ *", { exact: true })
+      .locator("..")
+      .getByText("กรุณาระบุประเภท วันที่ และสถานะคำขอ", { exact: true })
+      .waitFor();
+
     assert.equal(
       await page.getByLabel("หมวดหมู่", { exact: true }).isDisabled(),
       true,
@@ -586,6 +634,26 @@ try {
       fullPage: false,
     });
     await page.setViewportSize({ width: 390, height: 844 });
+    await page
+      .getByRole("button", { name: "ไปที่คำขอที่ 1", exact: true })
+      .click();
+    await page.waitForFunction(() => {
+      const heading = document.querySelector(".request-card h3");
+      const dialog = heading.closest("dialog");
+      return (
+        heading.getBoundingClientRect().top >=
+          dialog.querySelector(".modal-head").getBoundingClientRect().bottom &&
+        heading.getBoundingClientRect().bottom <
+          dialog.querySelector(".modal-actions").getBoundingClientRect().top
+      );
+    });
+    const mobileFormActions = await page
+      .getByRole("button", { name: "บันทึกข้อมูล", exact: true })
+      .boundingBox();
+    assert.ok(
+      mobileFormActions.y >= 0 &&
+        mobileFormActions.y + mobileFormActions.height <= 844,
+    );
     await page.screenshot({
       path: "/tmp/bs-sams-request-editor-mobile.png",
       fullPage: false,
@@ -840,6 +908,66 @@ try {
     page.off("request", captureExport);
     await page.getByLabel("ตั้งแต่วันที่", { exact: true }).fill("01/10/2569");
 
+    const mobileExportLayout = await monthPanel
+      .locator(".panel-title")
+      .evaluate((el) => {
+        const title = el.querySelector("h2").getBoundingClientRect();
+        const actions = el.querySelector(".actions").getBoundingClientRect();
+        return {
+          titleBottom: title.bottom,
+          actionsTop: actions.top,
+          heights: [...el.querySelectorAll("button")].map(
+            (b) => b.getBoundingClientRect().height,
+          ),
+        };
+      });
+    assert.ok(mobileExportLayout.actionsTop >= mobileExportLayout.titleBottom);
+    assert.ok(mobileExportLayout.heights.every((height) => height >= 44));
+    const monthlyScroll = page.getByRole("region", {
+      name: "ตารางรายละเอียดรายเดือน",
+      exact: true,
+    });
+    const monthlyFrame = monthlyScroll.locator("..");
+    await monthlyFrame
+      .getByText("เลื่อนซ้าย–ขวาเพื่อดูข้อมูล", { exact: true })
+      .waitFor();
+    const firstCellLeft = await monthlyScroll
+      .locator("tbody tr")
+      .first()
+      .locator("td")
+      .first()
+      .evaluate((el) => el.getBoundingClientRect().left);
+    await monthlyScroll.focus();
+    await page.keyboard.press("ArrowRight");
+    await page.waitForFunction(
+      () =>
+        document.querySelector('[aria-label="ตารางรายละเอียดรายเดือน"]')
+          .scrollLeft > 0,
+    );
+    assert.ok(
+      Math.abs(
+        (await monthlyScroll
+          .locator("tbody tr")
+          .first()
+          .locator("td")
+          .first()
+          .evaluate((el) => el.getBoundingClientRect().left)) - firstCellLeft,
+      ) < 2,
+    );
+    await monthlyScroll.evaluate((el) => {
+      el.scrollLeft = 0;
+      el.blur();
+    });
+    const skipLink = page.getByRole("link", { name: "ข้ามไปเนื้อหาหลัก" });
+    await skipLink.focus();
+    await skipLink.press("Enter");
+    assert.equal(
+      await page
+        .locator("#main-content")
+        .evaluate((el) => el === document.activeElement),
+      true,
+    );
+    await page.getByLabel("ตั้งแต่วันที่", { exact: true }).focus();
     await page.screenshot({
       path: "/tmp/bs-sams-report-mobile.png",
       fullPage: true,
@@ -1034,6 +1162,13 @@ try {
       .getByRole("button", { name: "ทะเบียนผู้ประสบปัญหา" })
       .click();
     await page.getByRole("button", { name: "ถังขยะ", exact: true }).click();
+    await page
+      .getByRole("button", { name: "ลบถาวร ทดสอบลบถาวร ระบบ", exact: true })
+      .hover();
+    await assertReadable(page, [
+      { selector: ".danger-button:hover", minimum: 13 },
+    ]);
+
     await page
       .getByRole("button", { name: "ลบถาวร ทดสอบลบถาวร ระบบ", exact: true })
       .click();

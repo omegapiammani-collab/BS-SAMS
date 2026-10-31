@@ -1,3 +1,4 @@
+import { focusAndReveal } from "./form-focus.js";
 import { personExport } from "./person-export.js";
 import { orderRequests } from "./request-order.js";
 import { formatThaiDate } from "./thai-date.js";
@@ -29,9 +30,17 @@ import {
   closed,
   personStatus,
   personLabels,
-  validatePerson,
+  validatePersonIssue,
 } from "./domain";
-import { Field, Select, Modal, Empty, ErrorBox, ConfirmDialog } from "./ui";
+import {
+  TableScroll,
+  Field,
+  Select,
+  Modal,
+  Empty,
+  ErrorBox,
+  ConfirmDialog,
+} from "./ui";
 import { downloadRows } from "./reports";
 import { formatMoney, sumMoney, thailandDate } from "./money";
 import { useUnsavedChanges } from "./use-unsaved-changes";
@@ -334,7 +343,7 @@ export function Registry({ user, config, refresh }) {
             </span>
           </div>
           <ErrorBox error={error} />
-          <div className="table-scroll">
+          <TableScroll aria-label="ตารางทะเบียนผู้ประสบปัญหา">
             <table>
               <thead>
                 <tr>
@@ -499,7 +508,7 @@ export function Registry({ user, config, refresh }) {
                 ))}
               </tbody>
             </table>
-          </div>
+          </TableScroll>
           {loading ? (
             <p className="loading">กำลังโหลดข้อมูล…</p>
           ) : (
@@ -673,11 +682,12 @@ function PersonEditor({ person, readonly, config, user, onClose, onSaved }) {
     [busy, setBusy] = useState(false);
   const [confirm, setConfirm] = useState(null);
   const [activeRequest, setActiveRequest] = useState(null);
+  const [issue, setIssue] = useState(null);
   useEffect(() => {
     if (!activeRequest) return;
     const heading = document.getElementById("request-" + activeRequest);
-    heading?.focus();
-    heading?.scrollIntoView({ block: "start", behavior: "smooth" });
+    const frame = requestAnimationFrame(() => focusAndReveal(heading));
+    return () => cancelAnimationFrame(frame);
   }, [activeRequest]);
   function addRequest(category) {
     const id = crypto.randomUUID();
@@ -701,10 +711,17 @@ function PersonEditor({ person, readonly, config, user, onClose, onSaved }) {
   const dirty = !readonly && JSON.stringify(p) !== original.current;
   useUnsavedChanges(dirty);
   useEffect(() => {
-    if (error) {
-      errorRef.current?.focus();
-    }
-  }, [error]);
+    if (!error) return;
+    if (issue?.field) {
+      const control = [
+        ...errorRef.current.closest("form").querySelectorAll("[data-field]"),
+      ].find((element) => element.dataset.field === issue.field);
+      if (control) {
+        const frame = requestAnimationFrame(() => focusAndReveal(control));
+        return () => cancelAnimationFrame(frame);
+      }
+    } else focusAndReveal(errorRef.current);
+  }, [error, issue, activeRequest]);
   const canDeleteSaved =
     user.role === "admin" ||
     (user.permissions.includes("delete") &&
@@ -748,7 +765,17 @@ function PersonEditor({ person, readonly, config, user, onClose, onSaved }) {
       );
     setConfirm(null);
   }
-  const update = (key, value) => setP({ ...p, [key]: value });
+  const update = (key, value) => {
+    setIssue(null);
+    setError("");
+    setP({ ...p, [key]: value });
+  };
+  const fieldError = (path) =>
+    issue?.field === path ? issue.message : undefined;
+  const fieldProps = (path) => ({
+    "data-field": path,
+    error: fieldError(path),
+  });
   const changeRequest = (id, key, val) =>
     update(
       "requests",
@@ -757,9 +784,14 @@ function PersonEditor({ person, readonly, config, user, onClose, onSaved }) {
   async function save(e) {
     e.preventDefault();
     setError("");
-    const err = validatePerson(p, config, undefined, person);
-    if (err) {
-      setError(err);
+    const invalid = validatePersonIssue(p, config, undefined, person);
+    if (invalid) {
+      setIssue(invalid);
+      setError(invalid.message);
+      const request = p.requests.find((r) =>
+        invalid.field?.startsWith(`requests.${r.id}.`),
+      );
+      if (request) setActiveRequest(request.id);
       return;
     }
     setBusy(true);
@@ -792,8 +824,10 @@ function PersonEditor({ person, readonly, config, user, onClose, onSaved }) {
   const input = (label, key, type = "text", required = false) => (
     <Field
       key={key}
+      {...fieldProps(key)}
       label={label}
       type={type}
+      maxLength={["first", "last"].includes(key) ? 100 : undefined}
       value={p[key] || ""}
       onChange={(e) => update(key, e.target.value)}
       required={required}
@@ -835,6 +869,7 @@ function PersonEditor({ person, readonly, config, user, onClose, onSaved }) {
               <div className="form-grid">
                 <Field
                   label="เลขบัตรประชาชน · ไม่บังคับ"
+                  {...fieldProps("nationalId")}
                   type="text"
                   inputMode="numeric"
                   maxLength={13}
@@ -928,6 +963,7 @@ function PersonEditor({ person, readonly, config, user, onClose, onSaved }) {
                 {input("บ้านเลขที่", "house")}
                 <Select
                   label="หมู่บ้าน *"
+                  {...fieldProps("village")}
                   value={p.village}
                   onChange={(e) => update("village", +e.target.value)}
                 >
@@ -957,6 +993,7 @@ function PersonEditor({ person, readonly, config, user, onClose, onSaved }) {
               className="request-groups"
               aria-label="สรุปคำขอ"
               id="request-summary"
+              tabIndex={-1}
             >
               {categories.map((category, categoryIndex) => {
                 const requests = orderRequests(
@@ -1013,9 +1050,9 @@ function PersonEditor({ person, readonly, config, user, onClose, onSaved }) {
                               onClick={() => {
                                 setActiveRequest(r.id);
                                 if (activeRequest === r.id)
-                                  document
-                                    .getElementById("request-" + r.id)
-                                    ?.scrollIntoView({ block: "start" });
+                                  focusAndReveal(
+                                    document.getElementById("request-" + r.id),
+                                  );
                               }}
                             >
                               <span className="request-tile-title">
@@ -1116,9 +1153,9 @@ function PersonEditor({ person, readonly, config, user, onClose, onSaved }) {
                     className="request-back"
                     onClick={() => {
                       setActiveRequest(null);
-                      document
-                        .getElementById("request-summary")
-                        ?.scrollIntoView({ block: "start" });
+                      focusAndReveal(
+                        document.getElementById("request-summary"),
+                      );
                     }}
                   >
                     <ChevronLeft size={16} />
@@ -1143,8 +1180,12 @@ function PersonEditor({ person, readonly, config, user, onClose, onSaved }) {
                           </option>
                         ))}
                       </Select>
-                      <Field label="ประเภทความช่วยเหลือ *">
+                      <Field
+                        label="ประเภทความช่วยเหลือ *"
+                        error={fieldError(`requests.${r.id}.type`)}
+                      >
                         <input
+                          data-field={`requests.${r.id}.type`}
                           list={"types-" + r.id}
                           value={r.type}
                           required
@@ -1158,9 +1199,13 @@ function PersonEditor({ person, readonly, config, user, onClose, onSaved }) {
                           ))}
                         </datalist>
                       </Field>
-                      <Field label="วันที่ยื่นคำขอ · พ.ศ.">
+                      <Field
+                        label="วันที่ยื่นคำขอ · พ.ศ."
+                        error={fieldError(`requests.${r.id}.date`)}
+                      >
                         <input
                           type="date"
+                          data-field={`requests.${r.id}.date`}
                           value={r.date}
                           min={p.birth || undefined}
                           max={today()}
@@ -1172,6 +1217,7 @@ function PersonEditor({ person, readonly, config, user, onClose, onSaved }) {
                       </Field>
                       <Select
                         label="สถานะ"
+                        {...fieldProps(`requests.${r.id}.status`)}
                         value={r.status}
                         onChange={(e) =>
                           changeRequest(r.id, "status", e.target.value)
@@ -1193,8 +1239,12 @@ function PersonEditor({ person, readonly, config, user, onClose, onSaved }) {
                       />
                     </Field>
                     {closed.includes(r.status) && (
-                      <Field label="เหตุผลยุติคำขอ *">
+                      <Field
+                        label="เหตุผลยุติคำขอ *"
+                        error={fieldError(`requests.${r.id}.reason`)}
+                      >
                         <textarea
+                          data-field={`requests.${r.id}.reason`}
                           value={r.reason}
                           required
                           onChange={(e) =>
@@ -1243,6 +1293,9 @@ function PersonEditor({ person, readonly, config, user, onClose, onSaved }) {
                             ].map(([label, key, type]) => (
                               <Field
                                 key={key}
+                                {...fieldProps(
+                                  `requests.${r.id}.payments.${x.id}.${key}`,
+                                )}
                                 label={label}
                                 type={type}
                                 step={

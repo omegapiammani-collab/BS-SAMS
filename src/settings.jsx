@@ -3,7 +3,7 @@ import React, { useEffect, useState } from "react";
 import { Plus, Pencil, Save, KeyRound } from "lucide-react";
 import { api } from "./api";
 import { permissions, permissionLabels, categories } from "./domain";
-import { Modal, Field, Select, ErrorBox } from "./ui";
+import { TableScroll, Modal, Field, Select, ErrorBox } from "./ui";
 export function UserAdmin({ config, me }) {
   const [users, setUsers] = useState([]),
     [edit, setEdit] = useState(null),
@@ -56,7 +56,7 @@ export function UserAdmin({ config, me }) {
             เพิ่มผู้ใช้งาน
           </button>
         </div>
-        <div className="table-scroll">
+        <TableScroll aria-label="ตารางผู้ใช้งาน">
           <table>
             <thead>
               <tr>
@@ -115,7 +115,7 @@ export function UserAdmin({ config, me }) {
               ))}
             </tbody>
           </table>
-        </div>
+        </TableScroll>
       </section>
       {edit && (
         <Modal

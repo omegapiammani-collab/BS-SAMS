@@ -268,6 +268,9 @@ function App() {
           }}
         />
       )}
+      <a className="skip-link" href="#main-content">
+        ข้ามไปเนื้อหาหลัก
+      </a>
       <aside className={menu ? "sidebar open" : "sidebar"}>
         <div className="brand">
           {config.logo ? (
@@ -295,6 +298,7 @@ function App() {
               <button
                 key={id}
                 className={page === id ? "active" : ""}
+                aria-current={page === id ? "page" : undefined}
                 onClick={() => {
                   setPage(id);
                   setMenu(false);
@@ -343,7 +347,7 @@ function App() {
             onLogout={logout}
           />
         </header>
-        <main className="content">
+        <main className="content" id="main-content" tabIndex={-1}>
           <ErrorBox error={error} />
           <div className="page-head">
             <div>
