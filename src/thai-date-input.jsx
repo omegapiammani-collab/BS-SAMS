@@ -1,4 +1,5 @@
-import React, { useEffect, useRef, useState } from "react";
+import { DateDraftContext } from "./date-draft-context.js";
+import React, { useEffect, useRef, useState, useContext } from "react";
 import { CalendarDays, X, ChevronLeft, ChevronRight } from "lucide-react";
 import { thailandDate } from "./money.js";
 import { calendarDays, shiftMonth, thaiMonths } from "./thai-calendar.js";
@@ -25,7 +26,11 @@ export function ThaiDateInput({
   id,
   ...props
 }) {
-  const [draft, setDraft] = useState(() => formatThaiDate(value));
+  const draftContext = useContext(DateDraftContext);
+  const fieldPath = props["data-field"];
+  const [draft, setDraft] = useState(
+    () => draftContext?.values[fieldPath] ?? formatThaiDate(value),
+  );
   const [source, setSource] = useState(value);
   const ref = useRef(null);
   const popup = useRef(null);
@@ -38,6 +43,7 @@ export function ThaiDateInput({
   const upper = max || `${Number(thailandDate().slice(0, 4)) + 100}-12-31`;
   const disabledDate = (iso) => iso < lower || iso > upper;
   function commit(iso) {
+    if (fieldPath) draftContext?.set(fieldPath, undefined);
     setDraft(formatThaiDate(iso));
     setSource(iso);
     onChange?.({
@@ -99,6 +105,7 @@ export function ThaiDateInput({
         </button>
         <input
           {...props}
+          autoComplete="off"
           id={id}
           ref={ref}
           type="text"
@@ -120,6 +127,8 @@ export function ThaiDateInput({
             const text = event.target.value;
             setDraft(text);
             const iso = text ? parseThaiDate(text) : "";
+            if (fieldPath)
+              draftContext?.set(fieldPath, iso === null ? text : undefined);
             if (iso !== null) {
               setSource(iso);
               onChange?.({

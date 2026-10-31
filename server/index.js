@@ -1,3 +1,12 @@
+import {
+  DraftError,
+  listDrafts,
+  readDraft,
+  saveDraft,
+  deleteDraft,
+  draftCleanup,
+} from "./drafts.js";
+import { findDuplicates } from "./duplicates.js";
 import { readJsonObject, RequestBodyError } from "./request-body.js";
 import { passwordHelp } from "../src/password-policy.js";
 import { validateAccount, validPassword } from "./accounts.js";
@@ -46,6 +55,11 @@ async function config(db) {
   return row ? JSON.parse(row.data) : structuredClone(defaultConfig);
 }
 export default {
+  async scheduled(_event, env) {
+    await env.DB.prepare("DELETE FROM person_drafts WHERE expires_at<=?")
+      .bind(Date.now())
+      .run();
+  },
   async fetch(request, env) {
     const url = new URL(request.url),
       path = url.pathname;
@@ -149,6 +163,31 @@ export default {
         });
       }
       if (u.mustChange) return fail("กรุณาเปลี่ยนรหัสผ่านก่อนใช้งาน", 403);
+      if (path === "/api/drafts" && method === "GET")
+        return json(await listDrafts(db, u));
+      const draftMatch = path.match(/^\/api\/drafts\/([a-f0-9-]{36})$/i);
+      if (draftMatch) {
+        if (method === "GET")
+          return json(await readDraft(db, u, draftMatch[1]));
+        if (method === "PUT")
+          return json(
+            await saveDraft(
+              db,
+              u,
+              draftMatch[1],
+              await readJsonObject(request),
+            ),
+          );
+        if (method === "DELETE")
+          return json(
+            await deleteDraft(
+              db,
+              u,
+              draftMatch[1],
+              (await readJsonObject(request)).version,
+            ),
+          );
+      }
       if (path === "/api/config") {
         if (method === "GET") return json(await config(db));
         if (method === "PUT" && u.role === "admin") {
@@ -266,10 +305,25 @@ export default {
         const p = await readJsonObject(request),
           cfg = await config(db);
         p.village = Number(p.village);
+        const cleanup = draftCleanup(db, u, p);
         const err = validatePerson(p, cfg);
         if (err) return fail(err);
         if (!allowed(u, "create", p.village) || !allowed(u, "view", p.village))
           return fail("ไม่มีสิทธิ์ในหมู่บ้านนี้", 403);
+        delete p.id;
+        delete p.version;
+        delete p.__dateDrafts;
+        const review = await findDuplicates(db, u, p);
+        if (review.candidates.length && p.duplicateReviewToken !== review.token)
+          return json(
+            {
+              error: "พบทะเบียนที่อาจเป็นบุคคลเดียวกัน กรุณาตรวจสอบก่อนบันทึก",
+              code: "DUPLICATE_REVIEW",
+              ...review,
+            },
+            409,
+          );
+        delete p.duplicateReviewToken;
         const id = crypto.randomUUID();
         p.id = id;
         p.createdAt = new Date().toISOString();
@@ -285,6 +339,10 @@ export default {
               JSON.stringify(p),
             ),
           audit(db, u, "create-person", id),
+          ...(review.candidates.length
+            ? [audit(db, u, "confirm-distinct-person", id)]
+            : []),
+          ...cleanup,
         ]);
         return json({ ...p, version: 1 }, 201);
       }
@@ -316,6 +374,11 @@ export default {
             )
             .bind(purgeMatch[1], body.version),
           audit(db, u, "purge-person", purgeMatch[1], true),
+          db
+            .prepare(
+              "DELETE FROM person_drafts WHERE person_id=? AND changes()>0",
+            )
+            .bind(purgeMatch[1]),
         ]);
         if (!result[0].meta.changes)
           return fail(
@@ -350,8 +413,15 @@ export default {
           return json({ ok: true });
         }
         if (stored.deleted_at) return fail("ข้อมูลอยู่ในถังขยะ", 404);
+        if (method === "GET") {
+          if (!allowed(u, "view", stored.village))
+            return fail("ไม่มีสิทธิ์", 403);
+          return json(personFromRow(stored));
+        }
         if (method === "PUT") {
           const p = await readJsonObject(request);
+          const cleanup = draftCleanup(db, u, p, true);
+          delete p.__dateDrafts;
           p.village = Number(p.village);
           if (
             !allowed(u, "view", stored.village) ||
@@ -391,6 +461,7 @@ export default {
             ...removed.payments.map((target) =>
               audit(db, u, "delete-assistance", target, true),
             ),
+            ...cleanup,
           ]);
           if (!result[0].meta.changes)
             return fail("มีผู้แก้ไขข้อมูลแล้ว กรุณาโหลดใหม่", 409);
@@ -519,6 +590,7 @@ export default {
         return json(await listAudit(db, url.searchParams));
       return fail("ไม่พบเส้นทางหรือไม่มีสิทธิ์", 404);
     } catch (e) {
+      if (e instanceof DraftError) return fail(e.message, e.status);
       if (e instanceof RequestBodyError) return fail(e.message, e.status);
       if (e instanceof QueryError) return fail(e.message);
       if (String(e).includes("UNIQUE constraint"))

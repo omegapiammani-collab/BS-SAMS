@@ -387,6 +387,7 @@ export function Reports({ user, config, range, setRange }) {
     <>
       <section className="panel">
         <form
+          autoComplete="on"
           ref={controls}
           className="report-controls"
           onSubmit={(event) => event.preventDefault()}

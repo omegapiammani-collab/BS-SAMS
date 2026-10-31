@@ -1,4 +1,5 @@
 export const auditActions = {
+  "confirm-distinct-person": "ยืนยันเพิ่มบุคคลแยกจากรายการที่อาจซ้ำ",
   "create-person": "เพิ่มทะเบียนบุคคล",
   "update-person": "แก้ไขทะเบียนบุคคล",
   "delete-request": "ลบคำขอความช่วยเหลือ",

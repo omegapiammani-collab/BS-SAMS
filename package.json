@@ -16,7 +16,8 @@
     "db:backup": "node scripts/backup.mjs",
     "db:verify-recovery": "node scripts/verify-recovery.mjs",
     "test:performance": "node scripts/performance.mjs",
-    "test:compatibility": "node tests/compatibility.mjs"
+    "test:compatibility": "node tests/compatibility.mjs",
+    "test:duplicates-drafts": "node tests/recovery-integration.mjs"
   },
   "dependencies": {
     "@fontsource/sarabun": "^5.2.0",

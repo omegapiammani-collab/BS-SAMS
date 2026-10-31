@@ -1306,9 +1306,19 @@ try {
       1,
     );
 
+    // These intentionally similar fixtures represent distinct people; acknowledge each warning explicitly.
+    async function createReviewedPerson(body) {
+      let result = await call("/people", "POST", body);
+      if (result.data.code === "DUPLICATE_REVIEW")
+        result = await call("/people", "POST", {
+          ...body,
+          duplicateReviewToken: result.data.token,
+        });
+      return result;
+    }
     // Verify server paging and export across pages using the real browser and D1.
     for (let i = 0; i < 14; i++) {
-      const created = await call("/people", "POST", {
+      const created = await createReviewedPerson({
         ...p,
         first: "ทดสอบแบ่งหน้า" + String(i).padStart(2, "0"),
         last: "ทดสอบ",
@@ -1802,7 +1812,7 @@ try {
       200,
     );
 
-    const deleteFixture = await call("/people", "POST", {
+    const deleteFixture = await createReviewedPerson({
       ...p,
       nationalId: "",
       requests: [{ ...p.requests[0], id: crypto.randomUUID() }],

@@ -49,6 +49,7 @@ export function AuditHistory() {
         ข้อมูลรหัสผ่านและรายละเอียดส่วนบุคคลไม่ถูกเก็บในประวัตินี้
       </p>
       <form
+        autoComplete="on"
         onSubmit={(e) => {
           e.preventDefault();
           setFilters({ ...draft });

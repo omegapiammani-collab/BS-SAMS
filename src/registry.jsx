@@ -1,3 +1,6 @@
+import { DateDraftContext } from "./date-draft-context.js";
+import { DraftRecovery } from "./draft-recovery.jsx";
+import { useServerDraft } from "./use-server-draft.js";
 import { focusAndReveal } from "./form-focus.js";
 import { personExport } from "./person-export.js";
 import { orderRequests } from "./request-order.js";
@@ -88,6 +91,7 @@ export function Registry({ user, config, refresh }) {
     [sort, setSort] = useState("name"),
     [ascending, setAscending] = useState(true),
     [editor, setEditor] = useState(null),
+    [recovery, setRecovery] = useState(null),
     [readonly, setReadonly] = useState(false),
     [deleting, setDeleting] = useState(null),
     [purging, setPurging] = useState(null),
@@ -194,6 +198,14 @@ export function Registry({ user, config, refresh }) {
   }
   return (
     <>
+      <DraftRecovery
+        reload={reload}
+        onResume={(draft) => {
+          setRecovery(draft);
+          setReadonly(!!draft.readonly);
+          setEditor(draft.person || initial());
+        }}
+      />
       <div className="registry-toolbar">
         <div className="tabs">
           <button
@@ -260,6 +272,7 @@ export function Registry({ user, config, refresh }) {
       </div>
       <div className="registry-layout">
         <form
+          autoComplete="on"
           className="panel filters"
           onSubmit={(e) => {
             e.preventDefault();
@@ -576,12 +589,25 @@ export function Registry({ user, config, refresh }) {
       </div>
       {editor && (
         <PersonEditor
+          key={(editor.id || "new") + "-" + (recovery?.id || "live")}
+          recovery={recovery}
+          onOpenExisting={async (id) => {
+            const existing = await api("/people/" + id);
+            setReadonly(!can(user, "edit", existing.village));
+            setRecovery(null);
+            setEditor(existing);
+          }}
           person={editor}
           readonly={readonly}
           config={config}
           user={user}
-          onClose={() => setEditor(null)}
+          onClose={() => {
+            setEditor(null);
+            setRecovery(null);
+            load();
+          }}
           onSaved={() => {
+            setRecovery(null);
             setEditor(null);
             load();
             refresh();
@@ -638,6 +664,7 @@ export function Registry({ user, config, refresh }) {
       {deleting && (
         <Modal title="ย้ายข้อมูลเข้าถังขยะ" onClose={() => setDeleting(null)}>
           <form
+            autoComplete="on"
             onSubmit={async (e) => {
               e.preventDefault();
               try {
@@ -676,10 +703,20 @@ export function Registry({ user, config, refresh }) {
     </>
   );
 }
-function PersonEditor({ person, readonly, config, user, onClose, onSaved }) {
-  const [p, setP] = useState(() => structuredClone(person)),
+function PersonEditor({
+  person,
+  readonly,
+  config,
+  user,
+  onClose,
+  onSaved,
+  onOpenExisting,
+  recovery,
+}) {
+  const [p, setP] = useState(() => structuredClone(recovery?.data || person)),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
+  const [duplicateReview, setDuplicateReview] = useState(null);
   const [confirm, setConfirm] = useState(null);
   const [activeRequest, setActiveRequest] = useState(null);
   const [issue, setIssue] = useState(null);
@@ -710,6 +747,14 @@ function PersonEditor({ person, readonly, config, user, onClose, onSaved }) {
   const errorRef = useRef(null);
   const dirty = !readonly && JSON.stringify(p) !== original.current;
   useUnsavedChanges(dirty);
+  const draft = useServerDraft({
+    person,
+    data: p,
+    dirty,
+    readonly,
+    recovery,
+    ownerId: user.id,
+  });
   useEffect(() => {
     if (!error) return;
     if (issue?.field) {
@@ -730,14 +775,34 @@ function PersonEditor({ person, readonly, config, user, onClose, onSaved }) {
   const savedPayments = new Set(
     person.requests.flatMap((r) => r.payments.map((x) => x.id)),
   );
-  function requestClose() {
+  async function requestClose() {
     if (busy) return;
-    if (dirty) setConfirm({ kind: "close" });
-    else onClose();
-  }
-  function discard() {
-    if (confirm.kind === "close") {
+    if (readonly) {
       onClose();
+      return;
+    }
+    if (dirty) setConfirm({ kind: "close" });
+    else {
+      try {
+        await draft.discard();
+        onClose();
+      } catch (e) {
+        setError(e.message);
+      }
+    }
+  }
+  async function discard() {
+    if (confirm.kind === "close") {
+      setBusy(true);
+      try {
+        await draft.discard();
+        onClose();
+      } catch (e) {
+        setError(e.message);
+        setConfirm(null);
+      } finally {
+        setBusy(false);
+      }
       return;
     }
     if (confirm.kind === "request") {
@@ -768,11 +833,12 @@ function PersonEditor({ person, readonly, config, user, onClose, onSaved }) {
   const update = (key, value) => {
     setIssue(null);
     setError("");
-    setP({ ...p, [key]: value });
+    setP((previous) => ({ ...previous, [key]: value }));
   };
   const fieldError = (path) =>
     issue?.field === path ? issue.message : undefined;
   const fieldProps = (path) => ({
+    name: `beneficiary-${path}`,
     "data-field": path,
     error: fieldError(path),
   });
@@ -781,7 +847,7 @@ function PersonEditor({ person, readonly, config, user, onClose, onSaved }) {
       "requests",
       p.requests.map((r) => (r.id === id ? { ...r, [key]: val } : r)),
     );
-  async function save(e) {
+  async function save(e, duplicateReviewToken) {
     e.preventDefault();
     setError("");
     const invalid = validatePersonIssue(p, config, undefined, person);
@@ -795,12 +861,21 @@ function PersonEditor({ person, readonly, config, user, onClose, onSaved }) {
       return;
     }
     setBusy(true);
+    draft.pause();
     try {
-      await api(p.id ? "/people/" + p.id : "/people", p.id ? "PUT" : "POST", p);
+      const draftToDelete = await draft.flush();
+      await api(p.id ? "/people/" + p.id : "/people", p.id ? "PUT" : "POST", {
+        ...p,
+        ...(draftToDelete ? { draftToDelete } : {}),
+        ...(duplicateReviewToken ? { duplicateReviewToken } : {}),
+      });
+      draft.finish();
       onSaved();
     } catch (e) {
-      setError(e.message);
+      if (e.data?.code === "DUPLICATE_REVIEW") setDuplicateReview(e.data);
+      else setError(e.message);
     } finally {
+      draft.resume();
       setBusy(false);
     }
   }
@@ -827,6 +902,13 @@ function PersonEditor({ person, readonly, config, user, onClose, onSaved }) {
       {...fieldProps(key)}
       label={label}
       type={type}
+      autoComplete={
+        {
+          first: "section-beneficiary given-name",
+          last: "section-beneficiary family-name",
+          phone: "section-beneficiary mobile tel",
+        }[key] || "off"
+      }
       maxLength={["first", "last"].includes(key) ? 100 : undefined}
       value={p[key] || ""}
       onChange={(e) => update(key, e.target.value)}
@@ -835,7 +917,26 @@ function PersonEditor({ person, readonly, config, user, onClose, onSaved }) {
     />
   );
   return (
-    <>
+    <DateDraftContext.Provider
+      value={{
+        values: p.__dateDrafts || {},
+        set: (path, value) =>
+          setP((previous) => {
+            if (
+              value === undefined &&
+              !Object.hasOwn(previous.__dateDrafts || {}, path)
+            )
+              return previous;
+            const dates = { ...previous.__dateDrafts };
+            if (value === undefined) delete dates[path];
+            else dates[path] = value;
+            const next = { ...previous };
+            if (Object.keys(dates).length) next.__dateDrafts = dates;
+            else delete next.__dateDrafts;
+            return next;
+          }),
+      }}
+    >
       <Modal
         title={
           readonly
@@ -849,6 +950,7 @@ function PersonEditor({ person, readonly, config, user, onClose, onSaved }) {
         wide
       >
         {readonly &&
+          !recovery &&
           person.id &&
           can(user, "view", person.village) &&
           can(user, "export", person.village) && (
@@ -859,10 +961,50 @@ function PersonEditor({ person, readonly, config, user, onClose, onSaved }) {
               </button>
             </div>
           )}
-        <form onSubmit={save}>
+        {recovery?.conflict && (
+          <div className="notice">
+            <strong>กำลังดูร่างเดิมแบบอ่านอย่างเดียว</strong>
+            <p>
+              ทะเบียนถูกแก้ไขหลังเก็บร่าง
+              ข้อมูลนี้ไม่ใช่ทะเบียนล่าสุดและไม่สามารถบันทึกทับได้
+            </p>
+            <button type="button" onClick={() => onOpenExisting(person.id)}>
+              เปิดทะเบียนล่าสุด (เก็บร่างไว้)
+            </button>
+          </div>
+        )}
+        <form autoComplete="on" onSubmit={save}>
           <div ref={errorRef} tabIndex={-1}>
             <ErrorBox error={error} />
           </div>
+          {!readonly && (
+            <div className="draft-status" role="status">
+              {draft.status.state === "idle" ? (
+                "เมื่อเริ่มแก้ไข ระบบจะเก็บร่างส่วนตัวบนเซิร์ฟเวอร์ อายุ 7 วัน โดยยังไม่เข้าเป็นทะเบียนจริง"
+              ) : draft.status.state === "saving" ? (
+                "กำลังเก็บร่าง… กรุณารอให้ยืนยันก่อนปิดหน้า"
+              ) : draft.status.state === "error" ? (
+                <>
+                  <strong>ยังเก็บร่างไม่สำเร็จ: {draft.status.message}</strong>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      draft.flush().catch((e) => setError(e.message))
+                    }
+                  >
+                    ลองเก็บร่างอีกครั้ง
+                  </button>
+                </>
+              ) : (
+                "เก็บร่างล่าสุดแล้ว เวลา " +
+                new Intl.DateTimeFormat("th-TH", {
+                  timeStyle: "short",
+                  timeZone: "Asia/Bangkok",
+                }).format(new Date(draft.status.updatedAt)) +
+                " · กดบันทึกข้อมูลเพื่อยืนยันเข้าทะเบียน"
+              )}
+            </div>
+          )}
           <fieldset disabled={busy}>
             <fieldset disabled={readonly}>
               <h3 className="section-title">ข้อมูลส่วนบุคคล</h3>
@@ -1393,6 +1535,82 @@ function PersonEditor({ person, readonly, config, user, onClose, onSaved }) {
           </div>
         </form>
       </Modal>
+      {duplicateReview && (
+        <Modal
+          title="ตรวจสอบบุคคลที่อาจซ้ำ"
+          closeDisabled={busy}
+          onClose={() => !busy && setDuplicateReview(null)}
+        >
+          {duplicateReview.candidates.some((c) =>
+            c.reasons.includes("เลขบัตรประชาชนตรงกัน"),
+          ) && (
+            <p className="error">
+              เลขบัตรประชาชนตรงกับทะเบียนเดิม ไม่สามารถยืนยันสร้างซ้ำได้
+              กรุณาใช้ทะเบียนเดิมหรือแก้เลขบัตรให้ถูกต้อง
+            </p>
+          )}
+          <p>
+            พบข้อมูลใกล้เคียง การเตือนนี้ไม่ใช่การยืนยันว่าเป็นคนเดียวกัน
+            กรุณาตรวจชื่อ วันเกิด และหมู่บ้านก่อนเพิ่มทะเบียนใหม่
+          </p>
+          {duplicateReview.candidates.map((candidate) => (
+            <div className="duplicate-candidate" key={candidate.id}>
+              <strong>
+                {candidate.first} {candidate.last}
+              </strong>
+              <p>
+                หมู่ {candidate.village} · วันเกิด{" "}
+                {candidate.birth ? formatThaiDate(candidate.birth) : "ไม่ระบุ"}
+                {candidate.deleted_at ? " · อยู่ในถังขยะ" : ""}
+              </p>
+              <p>{candidate.reasons.join(" · ")}</p>
+              {!candidate.deleted_at && (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={async () => {
+                    try {
+                      await draft.flush();
+                      await onOpenExisting(candidate.id);
+                    } catch (e) {
+                      setError(e.message);
+                      setDuplicateReview(null);
+                    }
+                  }}
+                >
+                  เปิดทะเบียนเดิม
+                </button>
+              )}
+            </div>
+          ))}
+          <div className="modal-actions">
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => setDuplicateReview(null)}
+            >
+              กลับไปตรวจข้อมูล
+            </button>
+            <button
+              type="button"
+              className="primary"
+              disabled={
+                busy ||
+                duplicateReview.candidates.some((c) =>
+                  c.reasons.includes("เลขบัตรประชาชนตรงกัน"),
+                )
+              }
+              onClick={async () => {
+                const token = duplicateReview.token;
+                setDuplicateReview(null);
+                await save({ preventDefault() {} }, token);
+              }}
+            >
+              ยืนยันเป็นคนละบุคคลและบันทึก
+            </button>
+          </div>
+        </Modal>
+      )}
       {confirm && (
         <ConfirmDialog
           title={
@@ -1417,9 +1635,10 @@ function PersonEditor({ person, readonly, config, user, onClose, onSaved }) {
                 : "ลบรายการใหม่"
           }
           onCancel={() => setConfirm(null)}
+          busy={busy}
           onConfirm={discard}
         />
       )}
-    </>
+    </DateDraftContext.Provider>
   );
 }

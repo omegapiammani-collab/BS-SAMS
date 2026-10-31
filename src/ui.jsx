@@ -5,17 +5,20 @@ import { focusAndReveal } from "./form-focus.js";
 import { X, Inbox, ArrowLeftRight } from "lucide-react";
 function fieldInput(props) {
   if (props.type === "date") return <ThaiDateInput {...props} />;
-  if (props.type === "password" && props.autoComplete === "new-password")
+  // Only fields with an explicit semantic hint opt into browser autofill.
+  const { autoComplete, ...inputProps } = props;
+  if (props.type === "password" && autoComplete === "new-password")
     return (
       <input
-        {...props}
+        {...inputProps}
+        autoComplete={autoComplete}
         minLength={8}
         maxLength={128}
         pattern={passwordPattern}
         title={passwordHelp}
       />
     );
-  return <input {...props} />;
+  return <input {...inputProps} autoComplete={autoComplete || "off"} />;
 }
 export function Field({ label, children, error, ...props }) {
   const id = React.useId();
@@ -47,6 +50,7 @@ export function Field({ label, children, error, ...props }) {
   }
   function decorate(control) {
     return {
+      autoComplete: "off",
       ...control,
       id,
       onChange: (event) => {
@@ -142,17 +146,27 @@ export function ConfirmDialog({
   title,
   description,
   confirmText,
+  busy = false,
   onConfirm,
   onCancel,
 }) {
   return (
-    <Modal title={title} onClose={onCancel}>
+    <Modal
+      title={title}
+      closeDisabled={busy}
+      onClose={() => !busy && onCancel()}
+    >
       <p>{description}</p>
       <div className="modal-actions">
-        <button type="button" onClick={onCancel}>
+        <button type="button" disabled={busy} onClick={onCancel}>
           กลับไปแก้ไข
         </button>
-        <button type="button" className="danger-button" onClick={onConfirm}>
+        <button
+          type="button"
+          disabled={busy}
+          className="danger-button"
+          onClick={onConfirm}
+        >
           {confirmText}
         </button>
       </div>

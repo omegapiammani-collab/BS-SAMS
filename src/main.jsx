@@ -115,7 +115,11 @@ function Login({ onLogin, change = false, notice = "", username = "" }) {
               {notice}
             </p>
           )}
-          <form key={change ? "change-password" : "login"} onSubmit={submit}>
+          <form
+            autoComplete="on"
+            key={change ? "change-password" : "login"}
+            onSubmit={submit}
+          >
             <ErrorBox error={error} />
             {change ? (
               <>

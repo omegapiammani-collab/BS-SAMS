@@ -32,7 +32,7 @@ export function PasswordDialog({ onClose, onSaved }) {
         เมื่อเปลี่ยนรหัสผ่านสำเร็จ ระบบจะออกจากระบบทุกอุปกรณ์
         กรุณาเข้าสู่ระบบอีกครั้งด้วยรหัสผ่านใหม่
       </p>
-      <form onSubmit={save}>
+      <form autoComplete="on" onSubmit={save}>
         <ErrorBox error={error} />
         <fieldset disabled={busy}>
           <Field

@@ -28,7 +28,7 @@ schema_query = "SELECT type,name,tbl_name,sql FROM sqlite_master WHERE sql IS NO
 schema = query(schema_query)
 tables = sorted((row["name"] for row in schema if row["type"] == "table"), key=lambda name: (name == "sessions", name != "users", name))
 expected = {"users", "sessions", "people", "config", "audit", "login_limits", "d1_migrations"}
-if set(tables) != expected:
+if set(tables) not in (expected, expected | {"person_drafts"}):
     raise SystemExit("Unexpected schema; use native D1 export for this database")
 parts = []
 columns_by_table = {}

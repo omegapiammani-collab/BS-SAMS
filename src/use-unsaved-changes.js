@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 
-// Keep drafts in memory only. Never persist social-welfare data in browser storage.
+// Warn while edits are uncommitted, even when a private server draft exists.
 export function useUnsavedChanges(dirty) {
   useEffect(() => {
     if (!dirty) return;

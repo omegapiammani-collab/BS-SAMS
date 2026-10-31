@@ -124,6 +124,7 @@ export function UserAdmin({ config, me }) {
           onClose={() => !busy && setEdit(null)}
         >
           <form
+            autoComplete="on"
             onSubmit={async (e) => {
               e.preventDefault();
               setError("");
@@ -324,7 +325,7 @@ export function SystemSettings({ config, onSaved }) {
         <AuditHistory />
       ) : (
         <section className="panel">
-          <form onSubmit={save}>
+          <form autoComplete="on" onSubmit={save}>
             <ErrorBox error={error} />
             {saved && (
               <p role="status" className="success">
@@ -515,7 +516,7 @@ function ResetPasswordDialog({ user, onClose, onSaved }) {
         ผู้ใช้ต้องเปลี่ยนรหัสผ่านชั่วคราวเมื่อเข้าสู่ระบบครั้งถัดไป
         กรุณาส่งรหัสผ่านให้เจ้าของบัญชีผ่านช่องทางที่เหมาะสม
       </p>
-      <form onSubmit={save}>
+      <form autoComplete="on" onSubmit={save}>
         <ErrorBox error={error} />
         <fieldset disabled={busy}>
           <Field

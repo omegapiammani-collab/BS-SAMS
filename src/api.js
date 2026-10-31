@@ -8,6 +8,11 @@ export async function api(path, method = "GET", body, options = {}) {
   const data = await r.json();
   if (r.status === 401 && path !== "/login")
     window.dispatchEvent(new Event("session-expired"));
-  if (!r.ok) throw new Error(data.error || "เกิดข้อผิดพลาด");
+  if (!r.ok) {
+    const error = new Error(data.error || "เกิดข้อผิดพลาด");
+    error.status = r.status;
+    error.data = data;
+    throw error;
+  }
   return data;
 }
