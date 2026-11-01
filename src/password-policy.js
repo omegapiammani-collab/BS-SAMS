@@ -8,3 +8,19 @@ export const validPassword = (value) =>
   value.length <= 128 &&
   !/[\r\n]/.test(value) &&
   new RegExp(`^${passwordPattern}$`, "u").test(value);
+
+export function generateTemporaryPassword() {
+  const alphabet =
+    "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%&*?";
+  const limit = 256 - (256 % alphabet.length);
+  const byte = new Uint8Array(1);
+  let password;
+  do {
+    password = "";
+    while (password.length < 8) {
+      crypto.getRandomValues(byte);
+      if (byte[0] < limit) password += alphabet[byte[0] % alphabet.length];
+    }
+  } while (!validPassword(password));
+  return password;
+}

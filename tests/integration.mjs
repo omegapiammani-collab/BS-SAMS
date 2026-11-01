@@ -1540,8 +1540,8 @@ try {
     });
     await page.setViewportSize({ width: 1536, height: 1024 });
     // Password reset is a separate administrator operation and revokes existing sessions.
-    const tempPassword = "Aa1!" + crypto.randomUUID(),
-      finalStaffPassword = "Aa1!" + crypto.randomUUID();
+    let tempPassword = "Aa1!" + crypto.randomUUID();
+    const finalStaffPassword = "Aa1!" + crypto.randomUUID();
     assert.equal(
       (
         await staffCall("/users/" + staffId + "/reset-password", "POST", {
@@ -1587,6 +1587,29 @@ try {
     await page
       .getByRole("dialog", { name: "รีเซ็ตรหัสผ่าน · qa-staff", exact: true })
       .waitFor();
+    await page
+      .getByRole("button", { name: "สร้างรหัสผ่าน 8 ตัว", exact: true })
+      .click();
+    tempPassword = await page
+      .getByLabel("รหัสผ่านชั่วคราวใหม่", { exact: true })
+      .inputValue();
+    assert.equal(tempPassword.length, 8);
+    assert.equal(
+      await page
+        .getByLabel("ยืนยันรหัสผ่านชั่วคราว", { exact: true })
+        .inputValue(),
+      tempPassword,
+    );
+    assert.equal((await staffCall("/me")).status, 200);
+    await page
+      .getByRole("button", { name: "ซ่อนรหัสผ่าน", exact: true })
+      .click();
+    assert.equal(
+      await page
+        .getByLabel("รหัสผ่านชั่วคราวใหม่", { exact: true })
+        .getAttribute("type"),
+      "password",
+    );
     await page.screenshot({
       path: "/tmp/bs-sams-reset-desktop.png",
       fullPage: false,

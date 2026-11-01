@@ -1,4 +1,9 @@
 import { AuditHistory } from "./audit-history";
+import {
+  generateTemporaryPassword,
+  passwordHelp,
+  passwordPattern,
+} from "./password-policy.js";
 import React, { useEffect, useState } from "react";
 import { Plus, Pencil, Save, KeyRound } from "lucide-react";
 import { api } from "./api";
@@ -485,6 +490,9 @@ export function SystemSettings({ config, onSaved }) {
 function ResetPasswordDialog({ user, onClose, onSaved }) {
   const [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   async function save(e) {
     e.preventDefault();
     const b = Object.fromEntries(new FormData(e.currentTarget));
@@ -519,10 +527,36 @@ function ResetPasswordDialog({ user, onClose, onSaved }) {
       <form autoComplete="on" onSubmit={save}>
         <ErrorBox error={error} />
         <fieldset disabled={busy}>
+          <div className="actions">
+            <button
+              type="button"
+              onClick={() => {
+                const generated = generateTemporaryPassword();
+                setPassword(generated);
+                setConfirm(generated);
+                setShowPassword(true);
+                setError("");
+              }}
+            >
+              <KeyRound size={16} />
+              สร้างรหัสผ่าน 8 ตัว
+            </button>
+            <button
+              type="button"
+              aria-pressed={showPassword}
+              onClick={() => setShowPassword(!showPassword)}
+            >
+              {showPassword ? "ซ่อนรหัสผ่าน" : "แสดงรหัสผ่าน"}
+            </button>
+          </div>
           <Field
             label="รหัสผ่านชั่วคราวใหม่"
             name="password"
-            type="password"
+            type={showPassword ? "text" : "password"}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            pattern={passwordPattern}
+            title={passwordHelp}
             minLength={8}
             maxLength={128}
             required
@@ -531,7 +565,11 @@ function ResetPasswordDialog({ user, onClose, onSaved }) {
           <Field
             label="ยืนยันรหัสผ่านชั่วคราว"
             name="confirm"
-            type="password"
+            type={showPassword ? "text" : "password"}
+            value={confirm}
+            onChange={(e) => setConfirm(e.target.value)}
+            pattern={passwordPattern}
+            title={passwordHelp}
             minLength={8}
             maxLength={128}
             required
