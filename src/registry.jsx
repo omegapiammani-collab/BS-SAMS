@@ -1333,25 +1333,32 @@ function PersonEditor({
                           </option>
                         ))}
                       </Select>
-                      <Field
+                      <Select
                         label="ประเภทความช่วยเหลือ *"
-                        error={fieldError(`requests.${r.id}.type`)}
+                        {...fieldProps(`requests.${r.id}.type`)}
+                        value={r.type}
+                        required
+                        onChange={(e) =>
+                          changeRequest(r.id, "type", e.target.value)
+                        }
                       >
-                        <input
-                          data-field={`requests.${r.id}.type`}
-                          list={"types-" + r.id}
-                          value={r.type}
-                          required
-                          onChange={(e) =>
-                            changeRequest(r.id, "type", e.target.value)
-                          }
-                        />
-                        <datalist id={"types-" + r.id}>
-                          {config.types[Number(r.category)].items.map((t) => (
-                            <option key={t}>{t}</option>
-                          ))}
-                        </datalist>
-                      </Field>
+                        <option value="" disabled>
+                          เลือกประเภทความช่วยเหลือ
+                        </option>
+                        {r.type &&
+                          !config.types[Number(r.category)].items.includes(
+                            r.type,
+                          ) && (
+                            <option value={r.type}>
+                              {r.type} (รายการเดิม)
+                            </option>
+                          )}
+                        {config.types[Number(r.category)].items.map((type) => (
+                          <option key={type} value={type}>
+                            {type}
+                          </option>
+                        ))}
+                      </Select>
                       <Field
                         label="วันที่ยื่นคำขอ · พ.ศ."
                         error={fieldError(`requests.${r.id}.date`)}

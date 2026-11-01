@@ -234,7 +234,7 @@ try {
     .click();
   await page
     .getByLabel("ประเภทความช่วยเหลือ *", { exact: true })
-    .fill("คำขอในร่าง");
+    .selectOption("เงินสงเคราะห์เด็กในครอบครัวยากจน");
   const requestStatus = page.getByLabel("สถานะ", { exact: true });
   assert.equal(
     await requestStatus.locator('option[value="referred"]').count(),
@@ -257,7 +257,7 @@ try {
   assert.ok(uiDraft);
   assert.equal(
     (await call(context, "/drafts/" + uiDraft.id)).data.data.requests[0].type,
-    "คำขอในร่าง",
+    "เงินสงเคราะห์เด็กในครอบครัวยากจน",
   );
   await page.close();
   const reopened = await browser.newContext({
@@ -304,7 +304,7 @@ try {
     await page
       .getByLabel("ประเภทความช่วยเหลือ *", { exact: true })
       .inputValue(),
-    "คำขอในร่าง",
+    "เงินสงเคราะห์เด็กในครอบครัวยากจน",
   );
   await page.getByRole("button", { name: "บันทึกข้อมูล", exact: true }).click();
   await page.getByRole("dialog").waitFor({ state: "hidden" });

@@ -438,9 +438,15 @@ try {
       0,
     );
 
-    await page
-      .getByLabel("ประเภทความช่วยเหลือ *", { exact: true })
-      .fill("เงินสงเคราะห์ทดสอบ");
+    const assistanceType = page.getByLabel("ประเภทความช่วยเหลือ *", {
+      exact: true,
+    });
+    assert.equal(
+      await assistanceType.evaluate((element) => element.tagName),
+      "SELECT",
+    );
+    assert.ok((await assistanceType.locator("option").count()) > 1);
+    await assistanceType.selectOption("เงินสงเคราะห์เด็กในครอบครัวยากจน");
     await page
       .getByLabel("วันที่ยื่นคำขอ · พ.ศ.", { exact: true })
       .fill("01/10/2569");
