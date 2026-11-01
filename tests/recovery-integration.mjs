@@ -251,6 +251,17 @@ try {
   }
   await page.screenshot({ path: "/tmp/bs-sams-optional-request-reason.png" });
   await requestStatus.selectOption("pending");
+  await page
+    .getByRole("button", { name: "กลับไปสรุปคำขอ", exact: true })
+    .click();
+  await page.locator(".request-group > summary").nth(6).click();
+  await page
+    .getByRole("button", { name: "เพิ่มคำขอ อื่น ๆ", exact: true })
+    .click();
+  const otherType = page.getByLabel("ประเภทความช่วยเหลือ *", { exact: true });
+  assert.equal(await otherType.evaluate((element) => element.tagName), "INPUT");
+  await otherType.fill("ช่วยเหลือค่าเดินทางไปโรงพยาบาล");
+  await page.screenshot({ path: "/tmp/bs-sams-other-assistance-type.png" });
   await page.getByText(/เก็บร่างล่าสุดแล้ว เวลา/).waitFor();
   const drafts = (await call(context, "/drafts")).data.items;
   const uiDraft = drafts.find((x) => x.first === "กู้คืนร่างทดสอบ");
@@ -259,6 +270,13 @@ try {
     (await call(context, "/drafts/" + uiDraft.id)).data.data.requests[0].type,
     "เงินสงเคราะห์เด็กในครอบครัวยากจน",
   );
+  await expect
+    .poll(
+      async () =>
+        (await call(context, "/drafts/" + uiDraft.id)).data.data.requests[1]
+          ?.type,
+    )
+    .toBe("ช่วยเหลือค่าเดินทางไปโรงพยาบาล");
   await page.close();
   const reopened = await browser.newContext({
     viewport: { width: 390, height: 844 },
@@ -308,6 +326,13 @@ try {
   );
   await page.getByRole("button", { name: "บันทึกข้อมูล", exact: true }).click();
   await page.getByRole("dialog").waitFor({ state: "hidden" });
+  const savedPerson = (
+    await call(context, "/people?q=" + encodeURIComponent("กู้คืนร่างทดสอบ"))
+  ).data.items[0];
+  assert.equal(
+    savedPerson.requests.find((request) => Number(request.category) === 6).type,
+    "ช่วยเหลือค่าเดินทางไปโรงพยาบาล",
+  );
   assert.ok(
     !(await call(context, "/drafts")).data.items.some(
       (x) => x.id === uiDraft.id,

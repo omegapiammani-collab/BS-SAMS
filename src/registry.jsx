@@ -1333,32 +1333,48 @@ function PersonEditor({
                           </option>
                         ))}
                       </Select>
-                      <Select
-                        label="ประเภทความช่วยเหลือ *"
-                        {...fieldProps(`requests.${r.id}.type`)}
-                        value={r.type}
-                        required
-                        onChange={(e) =>
-                          changeRequest(r.id, "type", e.target.value)
-                        }
-                      >
-                        <option value="" disabled>
-                          เลือกประเภทความช่วยเหลือ
-                        </option>
-                        {r.type &&
-                          !config.types[Number(r.category)].items.includes(
-                            r.type,
-                          ) && (
-                            <option value={r.type}>
-                              {r.type} (รายการเดิม)
-                            </option>
-                          )}
-                        {config.types[Number(r.category)].items.map((type) => (
-                          <option key={type} value={type}>
-                            {type}
+                      {Number(r.category) === 6 ? (
+                        <Field
+                          label="ประเภทความช่วยเหลือ *"
+                          {...fieldProps(`requests.${r.id}.type`)}
+                          type="text"
+                          value={r.type}
+                          required
+                          maxLength={300}
+                          onChange={(e) =>
+                            changeRequest(r.id, "type", e.target.value)
+                          }
+                        />
+                      ) : (
+                        <Select
+                          label="ประเภทความช่วยเหลือ *"
+                          {...fieldProps(`requests.${r.id}.type`)}
+                          value={r.type}
+                          required
+                          onChange={(e) =>
+                            changeRequest(r.id, "type", e.target.value)
+                          }
+                        >
+                          <option value="" disabled>
+                            เลือกประเภทความช่วยเหลือ
                           </option>
-                        ))}
-                      </Select>
+                          {r.type &&
+                            !config.types[Number(r.category)].items.includes(
+                              r.type,
+                            ) && (
+                              <option value={r.type}>
+                                {r.type} (รายการเดิม)
+                              </option>
+                            )}
+                          {config.types[Number(r.category)].items.map(
+                            (type) => (
+                              <option key={type} value={type}>
+                                {type}
+                              </option>
+                            ),
+                          )}
+                        </Select>
+                      )}
                       <Field
                         label="วันที่ยื่นคำขอ · พ.ศ."
                         error={fieldError(`requests.${r.id}.date`)}
