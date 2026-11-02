@@ -28,6 +28,7 @@ import "@fontsource/sarabun/500.css";
 import "@fontsource/sarabun/600.css";
 import "@fontsource/sarabun/700.css";
 import { api } from "./api";
+import { resetIdleSession, watchIdleSession } from "./idle-session.js";
 import { defaultConfig, fiscalYear, fiscalRange } from "./domain";
 import { Field, ErrorBox } from "./ui";
 import { Dashboard, Reports } from "./reports";
@@ -76,6 +77,7 @@ function Login({ onLogin, change = false, notice = "", username = "" }) {
           ...b,
           remember: b.remember === "on",
         });
+        resetIdleSession(user.id);
         setLoginPassword(user.mustChange ? b.password : "");
         onLogin(user);
       }
@@ -235,6 +237,19 @@ function App() {
         .then(setConfig)
         .catch((e) => setError(e.message));
   }, [user, refresh]);
+  const userId = user?.id;
+  useEffect(() => {
+    if (!userId) return;
+    return watchIdleSession(userId, () => {
+      setUser(null);
+      setPage("dashboard");
+      setMenu(false);
+      setPasswordOpen(false);
+      setNotice("");
+      setError("");
+      api("/logout", "POST", {}).catch(() => {});
+    });
+  }, [userId]);
   if (user === undefined) return <div className="loading">กำลังโหลดระบบ…</div>;
   if (!user || user.mustChange)
     return (
