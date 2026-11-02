@@ -138,3 +138,59 @@ test("expired session stays expired after a reload", () => {
   s.start();
   assert.equal(s.expirations, 1);
 });
+
+test("blocked browser storage does not break login or idle expiry", () => {
+  const s = setup();
+  const blocked = {
+    getItem() {
+      throw new Error("Storage disabled");
+    },
+    setItem() {
+      throw new Error("Storage disabled");
+    },
+  };
+  assert.doesNotThrow(() => resetIdleSession("blocked", blocked, s.time));
+  let expired = false;
+  const stop = watchIdleSession(
+    "blocked",
+    () => {
+      expired = true;
+    },
+    { ...s.options, storage: blocked },
+  );
+  s.advance(IDLE_TIMEOUT_MS);
+  assert.equal(expired, true);
+  stop();
+});
+
+test("non-finite stored timestamps cannot disable expiry", () => {
+  const s = setup();
+  s.storage.setItem("bs-sams:idle-session:1", "Infinity");
+  s.start();
+  s.advance(IDLE_TIMEOUT_MS);
+  assert.equal(s.expirations, 1);
+});
+
+test("write-only storage failures do not restore an old expired marker", () => {
+  const s = setup();
+  const full = {
+    getItem() {
+      return "expired";
+    },
+    setItem() {
+      throw new Error("Quota exceeded");
+    },
+  };
+  resetIdleSession("quota", full, s.time);
+  let expired = false;
+  watchIdleSession(
+    "quota",
+    () => {
+      expired = true;
+    },
+    { ...s.options, storage: full },
+  );
+  assert.equal(expired, false);
+  s.advance(IDLE_TIMEOUT_MS);
+  assert.equal(expired, true);
+});

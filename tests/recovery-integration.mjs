@@ -339,14 +339,16 @@ try {
     ),
   );
   await page.setViewportSize({ width: 1536, height: 1024 });
-  // Server draft values must never be written into browser storage.
-  assert.deepEqual(
-    await page.evaluate(() => ({
-      local: Object.keys(localStorage),
-      session: Object.keys(sessionStorage),
-    })),
-    { local: [], session: [] },
-  );
+  // Only the idle timestamp is allowed. Draft values stay on the server.
+  const stored = await page.evaluate(() => ({
+    local: Object.fromEntries(
+      Object.keys(localStorage).map((key) => [key, localStorage.getItem(key)]),
+    ),
+    session: Object.keys(sessionStorage),
+  }));
+  assert.deepEqual(Object.keys(stored.local), ["bs-sams:idle-session:a"]);
+  assert.match(stored.local["bs-sams:idle-session:a"], /^\d+$/);
+  assert.deepEqual(stored.session, []);
   await page
     .getByRole("button", { name: "เพิ่มผู้ประสบปัญหา", exact: true })
     .click();

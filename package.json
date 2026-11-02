@@ -17,7 +17,8 @@
     "db:verify-recovery": "node scripts/verify-recovery.mjs",
     "test:performance": "node scripts/performance.mjs",
     "test:compatibility": "node tests/compatibility.mjs",
-    "test:duplicates-drafts": "node tests/recovery-integration.mjs"
+    "test:duplicates-drafts": "node tests/recovery-integration.mjs",
+    "test:idle-session": "node tests/idle-session-integration.mjs"
   },
   "dependencies": {
     "@fontsource/sarabun": "^5.2.0",
