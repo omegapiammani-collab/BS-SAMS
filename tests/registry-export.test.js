@@ -70,6 +70,30 @@ test("missing house numbers remain blank in legacy records", () => {
   assert.equal(rows[1][rows[0].indexOf("บ้านเลขที่")], "");
 });
 
+test("category and assistance lines stay paired when categories repeat or type names match across categories", () => {
+  const requests = [
+    { category: "0", type: childAssistanceType },
+    { category: "0", type: "เงินสงเคราะห์และฟื้นฟูสมรรถภาพคนพิการ" },
+    { category: "1", type: "เงินซ่อมแซมบ้านคนพิการ" },
+    { category: "1", type: childAssistanceType },
+    { category: "0", type: childAssistanceType },
+  ];
+  const rows = registryExportRows([{ ...person, requests }]);
+  assert.equal(rows.length, 2);
+  assert.deepEqual(rows[1][9].split("\n"), [
+    "เงินสงเคราะห์",
+    "เงินสงเคราะห์",
+    "เงินซ่อมบ้าน",
+    "เงินซ่อมบ้าน",
+  ]);
+  assert.deepEqual(rows[1][10].split("\n"), [
+    childAssistanceType,
+    requests[1].type,
+    requests[2].type,
+    childAssistanceType,
+  ]);
+});
+
 test("registry exports include child identity and assistance type without removed columns", () => {
   const child = {
     ...newChild(),

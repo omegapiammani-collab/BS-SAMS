@@ -154,3 +154,62 @@ test("village report PDF wraps a complete Thai word instead of splitting its vow
     rmSync(directory, { recursive: true, force: true });
   }
 });
+
+test("registry PDF aligns each category with its type after a preceding type wraps", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "bs-sams-pdf-pairs-"));
+  try {
+    const rows = registryExportRows([
+      {
+        first: "ทดสอบ",
+        last: "จับคู่",
+        village: 1,
+        requests: [
+          { category: "0", type: "เงินสงเคราะห์และฟื้นฟูสมรรถภาพคนพิการ" },
+          { category: "1", type: "เงินซ่อมแซมบ้านคนพิการ" },
+        ],
+      },
+    ]);
+    const fonts = { Sarabun: { normal: "regular.ttf", bold: "bold.ttf" } };
+    const vfs = Object.fromEntries(
+      [
+        ["regular.ttf", "Sarabun-Regular.ttf"],
+        ["bold.ttf", "Sarabun-Bold.ttf"],
+      ].map(([key, name]) => [
+        key,
+        readFileSync(
+          new URL(`../src/assets/fonts/${name}`, import.meta.url),
+        ).toString("base64"),
+      ]),
+    );
+    const buffer = await new Promise((resolve) =>
+      pdfMake
+        .createPdf(
+          pdfDocument(rows, "ทะเบียนผู้ประสบปัญหา", registryPdfOptions),
+          undefined,
+          fonts,
+          vfs,
+        )
+        .getBuffer(resolve),
+    );
+    const file = join(directory, "registry.pdf");
+    writeFileSync(file, buffer);
+    const bounds = execFileSync("pdftotext", ["-bbox", file, "-"], {
+      encoding: "utf8",
+    });
+    const words = [
+      ...bounds.matchAll(
+        /<word xMin="([\d.]+)" yMin="([\d.]+)" xMax="[\d.]+" yMax="[\d.]+">([^<]+)<\/word>/g,
+      ),
+    ];
+    const category = words.find((word) => word[3] === "เงินซ่อมบ้าน");
+    const type = words.find((word) => word[3] === "เงินซ่อมแซมบ้านคนพิการ");
+    assert.ok(category && type);
+    assert.ok(
+      Math.abs(Number(category[2]) - Number(type[2])) < 0.01,
+      "Each category/type pair must start on the same baseline",
+    );
+    assert.ok(Number(category[1]) < Number(type[1]));
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});

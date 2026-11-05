@@ -8,6 +8,7 @@ export function pdfDocument(
     columnWeights,
     wrapChildAssistance = false,
     thaiWordWrapColumns = [],
+    pairedColumns = [],
   } = {},
 ) {
   const columns = Math.max(1, ...rows.map((row) => row.length));
@@ -65,17 +66,51 @@ export function pdfDocument(
             widths: weights.map(
               (weight) => (availableWidth * weight) / totalWeight,
             ),
-            body: group.map((row, index) =>
-              Array.from({ length: count }, (_, col) => ({
-                text: pdfText(row[col], {
-                  wrapChildAssistance,
-                  thaiWordWrap: index > 0 && thaiWordWrapColumns.includes(col),
+            body: group.flatMap((row, index) => {
+              const pairs = new Map(
+                index === 0
+                  ? []
+                  : pairedColumns.map((col) => [
+                      col,
+                      String(row[col] ?? "").split("\n"),
+                    ]),
+              );
+              const pairCount = Math.max(
+                1,
+                ...Array.from(pairs.values(), (lines) => lines.length),
+              );
+              return Array.from({ length: pairCount }, (_, pairIndex) =>
+                Array.from({ length: count }, (_, col) => {
+                  if (pairIndex > 0 && !pairs.has(col)) return {};
+                  return {
+                    text: pdfText(
+                      pairs.has(col) ? pairs.get(col)[pairIndex] : row[col],
+                      {
+                        wrapChildAssistance,
+                        thaiWordWrap:
+                          index > 0 && thaiWordWrapColumns.includes(col),
+                      },
+                    ),
+                    ...(!pairs.has(col) && pairCount > 1
+                      ? { rowSpan: pairCount }
+                      : {}),
+                    ...(pairs.has(col) && pairCount > 1
+                      ? {
+                          border: [
+                            false,
+                            pairIndex === 0,
+                            false,
+                            pairIndex === pairCount - 1,
+                          ],
+                        }
+                      : {}),
+                    bold: index === 0,
+                    fillColor: index === 0 ? "#edf4fc" : null,
+                    margin: [2, 4, 2, 4],
+                  };
                 }),
-                bold: index === 0,
-                fillColor: index === 0 ? "#edf4fc" : null,
-                margin: [2, 4, 2, 4],
-              })),
-            ),
+              );
+            }),
           },
         };
       }),

@@ -54,7 +54,7 @@ export function reportExport(sum, config, range, type, section) {
         ? config.villages.flatMap((v) => {
             const name = `หมู่ ${v.id} บ้าน${v.name}`;
             const types = (sum.villageAssistanceTypes || []).filter(
-              (item) => item.village === Number(v.id),
+              (item) => item.village === Number(v.id) && item.people > 0,
             );
             return types.length
               ? types.map((item) => [
@@ -63,7 +63,9 @@ export function reportExport(sum, config, range, type, section) {
                   item.type,
                   item.people,
                 ])
-              : [[name, "", "", sum.villages[v.id] || 0]];
+              : sum.villages[v.id] > 0
+                ? [[name, "", "", sum.villages[v.id]]]
+                : [];
           })
         : categoryRows),
       [],

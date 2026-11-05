@@ -129,16 +129,69 @@ test("village exports group unique people by village, category and assistance ty
     "ประเภทความช่วยเหลือ",
     "จำนวนคน",
   ]);
-  assert.deepEqual(output.rows.slice(4, 8), [
+  assert.deepEqual(output.rows.slice(4, 7), [
     ["หมู่ 1 บ้านหนึ่ง", categories[0], "เด็ก", 2],
     ["หมู่ 1 บ้านหนึ่ง", categories[1], "ซ่อมบ้าน", 1],
     ["หมู่ 2 บ้านสอง", categories[0], "เด็ก", 1],
-    ["หมู่ 3 บ้านสาม", "", "", 0],
   ]);
+  assert.ok(!output.rows.some((row) => row[0] === "หมู่ 3 บ้านสาม"));
   assert.deepEqual(output.rows.slice(-3), [
     ["ยอดรวมผู้ยื่นคำขอ", "", "", 3],
     ["ผู้ได้รับความช่วยเหลือจริง", "", "", 0],
     ["จำนวนครั้งช่วยเหลือ", "", "", 0],
   ]);
   assert.ok(!JSON.stringify(output.rows).includes("นอกช่วง"));
+});
+
+test("village exports include recorded types from every category and omit empty villages", () => {
+  const requests = categories.flatMap((_, category) => [
+    {
+      category,
+      type: `ประเภทแรกหมวด ${category}`,
+      date: range[0],
+      status: "pending",
+      payments: [],
+    },
+    {
+      category,
+      type: `ประเภทที่สองหมวด ${category}`,
+      date: range[0],
+      status: "pending",
+      payments: [],
+    },
+  ]);
+  const summary = summarize([{ village: 1, requests }], ...range);
+  const output = reportExport(
+    summary,
+    {
+      villages: [
+        { id: 1, name: "หนึ่ง" },
+        { id: 2, name: "ไม่มีข้อมูล" },
+      ],
+    },
+    range,
+    "village",
+    "summary",
+  );
+  const data = output.rows.filter((row) => row[0] === "หมู่ 1 บ้านหนึ่ง");
+  assert.equal(data.length, categories.length * 2);
+  for (const [index, category] of categories.entries()) {
+    assert.deepEqual(
+      data.filter((row) => row[1] === category),
+      [
+        ["หมู่ 1 บ้านหนึ่ง", category, `ประเภทแรกหมวด ${index}`, 1],
+        ["หมู่ 1 บ้านหนึ่ง", category, `ประเภทที่สองหมวด ${index}`, 1],
+      ],
+    );
+  }
+  assert.ok(!JSON.stringify(output.rows).includes("ไม่มีข้อมูล"));
+  const empty = reportExport(
+    summarize([], ...range),
+    config,
+    range,
+    "village",
+    "summary",
+  );
+  assert.ok(!empty.rows.some((row) => row[0] === "หมู่ 1 บ้านทดสอบ"));
+  assert.deepEqual(empty.rows.at(-3), ["ยอดรวมผู้ยื่นคำขอ", "", "", 0]);
 });
