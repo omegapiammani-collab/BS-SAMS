@@ -2369,6 +2369,8 @@ textarea[aria-invalid="true"] {
   .table-scroll-hint {
     display: flex;
   }
+}
+@media (min-width: 601px) and (max-width: 900px) {
   .table-scroll th:first-child,
   .table-scroll td:first-child {
     position: sticky;
