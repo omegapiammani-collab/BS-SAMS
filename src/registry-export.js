@@ -38,11 +38,11 @@ export function registryExportRows(people, filters = {}) {
         person.nationalId,
         formatThaiDate(person.birth),
         age(person.birth),
-        person.house || "ไม่ระบุ",
+        person.house || "",
         person.village,
         person.phone,
-        types.join("\n") || "ไม่ระบุ",
-        (person.submissionChannels || []).join("\n") || "ไม่ระบุ",
+        types.join("\n"),
+        (person.submissionChannels || []).join("\n"),
       ];
     }),
   ];

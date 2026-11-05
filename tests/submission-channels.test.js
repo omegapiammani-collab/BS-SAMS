@@ -27,7 +27,7 @@ test("submission channels accept old records, no selection, either or both choic
     const p = { ...person, submissionChannels: selection };
     assert.equal(validatePerson(p, defaultConfig), null);
     assert.equal(validateDraftData(p), true);
-    const text = selection?.join("\n") || "ไม่ระบุ";
+    const text = selection?.join("\n") || "";
     assert.deepEqual(
       personExport(p, defaultConfig).find((r) => r[0] === "ยื่นคำร้องผ่านระบบ"),
       ["ยื่นคำร้องผ่านระบบ", text],

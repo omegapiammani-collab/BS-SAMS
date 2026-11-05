@@ -66,3 +66,50 @@ test("individual PDF contains identity, every request and assistance, and Thai d
     ),
   );
 });
+
+test("missing individual PDF fields remain blank while real values are retained", () => {
+  const person = {
+    first: "ทดสอบ",
+    last: "ข้อมูลว่าง",
+    village: 1,
+    disabilities: [],
+    requests: [
+      {
+        id: "r1",
+        category: "0",
+        type: "สงเคราะห์",
+        date: "2026-10-01",
+        status: "done",
+        payments: [
+          {
+            date: "2026-10-02",
+            provider: "หน่วยงาน",
+            amount: 0,
+            detail: "ไม่ระบุ",
+          },
+        ],
+      },
+    ],
+  };
+  const rows = personExport(person, { villages: [] });
+  const value = (label) => rows.find((row) => row[0] === label)?.[1];
+  for (const label of [
+    "เลขบัตรประชาชน",
+    "วันเกิด",
+    "อายุ",
+    "สถานภาพสมรส",
+    "ยื่นคำร้องผ่านระบบ",
+    "โทรศัพท์",
+    "รหัสประจำบ้าน",
+    "บ้านเลขที่",
+    "สภาพปัญหาและรายละเอียดคำขอ",
+    "จำนวนสิ่งของ",
+  ])
+    assert.equal(value(label), "", label);
+  assert.equal(value("จำนวนเงิน (บาท)"), "0.00");
+  assert.equal(value("รายละเอียดความช่วยเหลือ"), "ไม่ระบุ");
+  assert.equal(value("ความพิการ"), "ไม่มีความพิการ");
+  person.requests[0].payments[0].quantity = 0;
+  const withZero = personExport(person, { villages: [] });
+  assert.equal(withZero.find((row) => row[0] === "จำนวนสิ่งของ")[1], "0");
+});

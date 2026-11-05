@@ -49,7 +49,7 @@ test("registry exports show only the selected assistance category including cate
   );
 });
 
-test("missing house numbers remain readable in legacy records", () => {
+test("missing house numbers remain blank in legacy records", () => {
   const rows = registryExportRows([{ ...person, house: undefined }]);
-  assert.equal(rows[1][rows[0].indexOf("บ้านเลขที่")], "ไม่ระบุ");
+  assert.equal(rows[1][rows[0].indexOf("บ้านเลขที่")], "");
 });

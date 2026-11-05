@@ -656,7 +656,8 @@ nav button svg:last-child:not(:first-child) {
   margin-bottom: 17px;
   font-size: var(--font-small);
 }
-.field > label {
+.field > label,
+.submission-channels > legend {
   font-weight: 500;
   color: #5b6d86;
 }
@@ -1578,7 +1579,8 @@ summary {
 .panel-note {
   font-size: var(--font-caption);
 }
-.field > label {
+.field > label,
+.submission-channels > legend {
   color: #50617a;
 }
 
@@ -2314,8 +2316,9 @@ textarea[aria-invalid="true"] {
 }
 
 .submission-channels > legend {
-  color: #50617a;
   font-size: var(--font-small);
-  font-weight: 500;
   margin-bottom: 7px;
+}
+.submission-channels:disabled {
+  opacity: 1;
 }

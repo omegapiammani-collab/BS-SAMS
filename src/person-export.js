@@ -14,26 +14,20 @@ export function personExport(person, config) {
   const rows = [
     ["ข้อมูลผู้ประสบปัญหา", "รายละเอียด"],
     ["ชื่อ–นามสกุล", `${person.title || ""}${person.first} ${person.last}`],
-    ["เลขบัตรประชาชน", person.nationalId || "ไม่ระบุ"],
-    ["วันเกิด", formatThaiDate(person.birth) || "ไม่ระบุ"],
-    [
-      "อายุ",
-      person.birth ? `${age(person.birth, thailandDate())} ปี` : "ไม่ระบุ",
-    ],
-    ["สถานภาพสมรส", person.marital || "ไม่ระบุ"],
+    ["เลขบัตรประชาชน", person.nationalId || ""],
+    ["วันเกิด", formatThaiDate(person.birth) || ""],
+    ["อายุ", person.birth ? `${age(person.birth, thailandDate())} ปี` : ""],
+    ["สถานภาพสมรส", person.marital || ""],
     [
       "ความพิการ",
       person.disabilities.length
         ? person.disabilities.join(", ")
         : "ไม่มีความพิการ",
     ],
-    [
-      "ยื่นคำร้องผ่านระบบ",
-      (person.submissionChannels || []).join("\n") || "ไม่ระบุ",
-    ],
-    ["โทรศัพท์", person.phone || "ไม่ระบุ"],
-    ["รหัสประจำบ้าน", person.houseCode || "ไม่ระบุ"],
-    ["บ้านเลขที่", person.house || "ไม่ระบุ"],
+    ["ยื่นคำร้องผ่านระบบ", (person.submissionChannels || []).join("\n")],
+    ["โทรศัพท์", person.phone || ""],
+    ["รหัสประจำบ้าน", person.houseCode || ""],
+    ["บ้านเลขที่", person.house || ""],
     [
       "หมู่บ้าน",
       `หมู่ ${person.village}${village ? ` บ้าน${village.name}` : ""}`,
@@ -55,8 +49,8 @@ export function personExport(person, config) {
       ["ประเภทความช่วยเหลือ", request.type],
       ["วันที่ยื่นคำขอ", formatThaiDate(request.date)],
       ["สถานะคำขอ", statuses[request.status]],
-      ["สภาพปัญหาและรายละเอียดคำขอ", request.note || "ไม่ระบุ"],
-      [requestReasonLabel(request.status), request.reason || "ไม่ระบุ"],
+      ["สภาพปัญหาและรายละเอียดคำขอ", request.note || ""],
+      [requestReasonLabel(request.status), request.reason || ""],
     );
     if (!request.payments.length)
       rows.push(["ประวัติการช่วยเหลือ", "ยังไม่มีการช่วยเหลือ"]);
@@ -72,11 +66,13 @@ export function personExport(person, config) {
         ["จำนวนเงิน (บาท)", formatMoney(payment.amount)],
         [
           "จำนวนสิ่งของ",
-          payment.quantity
-            ? `${payment.quantity} ${payment.unit || ""}`
-            : "ไม่ระบุ",
+          payment.quantity !== undefined &&
+          payment.quantity !== null &&
+          payment.quantity !== ""
+            ? `${payment.quantity}${payment.unit ? ` ${payment.unit}` : ""}`
+            : "",
         ],
-        ["รายละเอียดความช่วยเหลือ", payment.detail || "ไม่ระบุ"],
+        ["รายละเอียดความช่วยเหลือ", payment.detail || ""],
       );
   }
   return rows;

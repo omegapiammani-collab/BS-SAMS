@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import ExcelJS from "exceljs";
-import { chromium } from "@playwright/test";
+import { chromium, expect } from "@playwright/test";
 import { hashPassword } from "../server/auth.js";
 import { submissionChannels } from "../src/domain.js";
 import { localFixture, startWorker } from "../scripts/local-fixture.mjs";
@@ -43,15 +43,23 @@ try {
   for (const label of submissionChannels)
     await page.getByRole("checkbox", { name: label, exact: true }).check();
   await page.getByText(/เก็บร่างล่าสุดแล้ว เวลา/).waitFor();
-  const draftList = await (
-    await context.request.get(worker.origin + "/api/drafts")
-  ).json();
-  const draft = await (
-    await context.request.get(
-      worker.origin + "/api/drafts/" + draftList.items[0].id,
+  await expect
+    .poll(
+      async () => {
+        const list = await (
+          await context.request.get(worker.origin + "/api/drafts")
+        ).json();
+        if (!list.items.length) return [];
+        const draft = await (
+          await context.request.get(
+            worker.origin + "/api/drafts/" + list.items[0].id,
+          )
+        ).json();
+        return draft.data.submissionChannels;
+      },
+      { timeout: 10000 },
     )
-  ).json();
-  assert.deepEqual(draft.data.submissionChannels, submissionChannels);
+    .toEqual(submissionChannels);
   await page
     .locator(".submission-channels")
     .screenshot({ path: "/tmp/bs-sams-submission-channels.png" });
@@ -117,6 +125,11 @@ try {
   const headers = sheet.getRow(1).values.slice(1);
   assert.ok(!headers.includes("เลขทะเบียน"));
   assert.ok(!headers.includes("สถานะ"));
+  for (const heading of ["เลขบัตรประชาชน", "โทรศัพท์", "ประเภทความช่วยเหลือ"])
+    assert.equal(
+      sheet.getRow(2).getCell(headers.indexOf(heading) + 1).text,
+      "",
+    );
   assert.equal(
     sheet.getRow(2).getCell(headers.indexOf("บ้านเลขที่") + 1).value,
     "001/2",
@@ -150,6 +163,7 @@ try {
     })
       .replace(/[\s\u200b]/g, "")
       .replace(/ำา/g, "ำ");
+    assert.equal(text.includes("ไม่ระบุ"), false);
     for (const label of ["ยื่นคำร้องผ่านระบบ", ...submissionChannels, "001/2"])
       assert.ok(text.includes(label.replace(/\s/g, "")), label);
   }
