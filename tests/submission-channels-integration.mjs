@@ -12,7 +12,8 @@ let worker, browser;
 try {
   fixture.migrate();
   fixture.sql(
-    `INSERT INTO users VALUES('channels-qa','channels-qa','ทดสอบช่องทาง','${await hashPassword(password)}','admin','[]','[]',0,1);`,
+    `INSERT INTO users VALUES('channels-qa','channels-qa','ทดสอบช่องทาง','${await hashPassword(password)}','admin','[]','[]',0,1);
+    INSERT INTO users VALUES('channels-viewer','channels-viewer','ทดสอบสิทธิ์ดู','${await hashPassword(password)}','staff','["view"]','[1]',0,1);`,
   );
   worker = await startWorker(fixture.state);
   browser = await chromium.launch({
@@ -171,13 +172,48 @@ try {
     page.getByRole("button", { name: "PDF", exact: true }),
     "/tmp/bs-sams-channels-registry.pdf",
   );
-  await page
-    .getByRole("button", { name: "ดู ทดสอบช่องทาง", exact: true })
-    .click();
   await checkPdf(
-    page.getByRole("button", { name: "ส่งออก PDF รายบุคคล", exact: true }),
+    page.getByRole("button", { name: /^ส่งออก PDF รายบุคคล ทดสอบช่องทาง / }),
     "/tmp/bs-sams-channels-person.pdf",
   );
+  const actions = page
+    .getByRole("button", { name: "ดู ทดสอบช่องทาง", exact: true })
+    .locator("..");
+  const labels = await actions
+    .getByRole("button")
+    .evaluateAll((buttons) =>
+      buttons.map((button) => button.getAttribute("aria-label")),
+    );
+  assert.equal(labels[0], "ดู ทดสอบช่องทาง");
+  assert.match(labels[1], /^ส่งออก PDF รายบุคคล ทดสอบช่องทาง /);
+  assert.equal(labels[2], "แก้ไข ทดสอบช่องทาง");
+  assert.equal(labels[3], "ลบ ทดสอบช่องทาง");
+  const viewer = await browser.newContext();
+  await viewer.request.post(worker.origin + "/api/login", {
+    data: { username: "channels-viewer", password },
+  });
+  const viewerPage = await viewer.newPage();
+  await viewerPage.goto(worker.origin);
+  await viewerPage
+    .getByRole("navigation")
+    .getByRole("button", { name: "ทะเบียนผู้ประสบปัญหา", exact: true })
+    .click();
+  await expect(
+    viewerPage.getByRole("button", { name: "ดู ทดสอบช่องทาง", exact: true }),
+  ).toBeVisible();
+  await expect(
+    viewerPage.getByRole("button", { name: /^ส่งออก PDF รายบุคคล/ }),
+  ).toHaveCount(0);
+  assert.equal(
+    (
+      await viewer.request.post(
+        worker.origin + "/api/people/" + person.id + "/export",
+        { data: {} },
+      )
+    ).status(),
+    403,
+  );
+  await viewer.close();
   assert.deepEqual(errors, []);
   console.log(
     "PASS: both checkboxes, private drafts, create/edit/reload persistence, uncheck, desktop/mobile, matching CSV/Excel and registry/individual PDF downloads with house numbers, no runtime errors",

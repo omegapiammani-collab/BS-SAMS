@@ -14,6 +14,7 @@ import {
   Minus,
   Search,
   Eye,
+  FileDown,
   Pencil,
   Trash2,
   RotateCcw,
@@ -175,6 +176,23 @@ export function Registry({ user, config, refresh }) {
     setDateReset((value) => value + 1);
     setFilters({});
     setPage(1);
+  }
+  async function exportPersonPdf(person) {
+    setBusy(true);
+    setError("");
+    try {
+      const saved = await api("/people/" + person.id + "/export", "POST", {});
+      await downloadRows(
+        personExport(saved, config),
+        "pdf",
+        "รายละเอียดผู้ประสบปัญหา-" + saved.id,
+        { orientation: "portrait", title: "รายละเอียดผู้ประสบปัญหา" },
+      );
+    } catch (error) {
+      setError(error.message);
+    } finally {
+      setBusy(false);
+    }
   }
   async function exportData(f) {
     try {
@@ -598,6 +616,19 @@ export function Registry({ user, config, refresh }) {
                                 >
                                   <Eye size={17} />
                                 </button>
+                                {can(user, "view", p.village) &&
+                                  can(user, "export", p.village) && (
+                                    <button
+                                      type="button"
+                                      className="icon"
+                                      aria-label={`ส่งออก PDF รายบุคคล ${p.first} ${p.last}`}
+                                      title="ส่งออก PDF รายบุคคล"
+                                      disabled={busy}
+                                      onClick={() => exportPersonPdf(p)}
+                                    >
+                                      <FileDown size={17} />
+                                    </button>
+                                  )}
                                 {can(user, "edit", p.village) && (
                                   <button
                                     className="icon"
@@ -1042,23 +1073,6 @@ function PersonEditor({
       setBusy(false);
     }
   }
-  async function exportPersonPdf() {
-    setBusy(true);
-    setError("");
-    try {
-      const saved = await api("/people/" + person.id + "/export", "POST", {});
-      await downloadRows(
-        personExport(saved, config),
-        "pdf",
-        "รายละเอียดผู้ประสบปัญหา-" + saved.id,
-        { orientation: "portrait", title: "รายละเอียดผู้ประสบปัญหา" },
-      );
-    } catch (error) {
-      setError(error.message);
-    } finally {
-      setBusy(false);
-    }
-  }
   const input = (label, key, type = "text", required = false) => (
     <Field
       key={key}
@@ -1112,18 +1126,6 @@ function PersonEditor({
         closeDisabled={busy}
         wide
       >
-        {readonly &&
-          !recovery &&
-          person.id &&
-          can(user, "view", person.village) &&
-          can(user, "export", person.village) && (
-            <div className="person-export-actions">
-              <button type="button" disabled={busy} onClick={exportPersonPdf}>
-                <Download size={16} />
-                ส่งออก PDF รายบุคคล
-              </button>
-            </div>
-          )}
         {recovery?.conflict && (
           <div className="notice">
             <strong>กำลังดูร่างเดิมแบบอ่านอย่างเดียว</strong>

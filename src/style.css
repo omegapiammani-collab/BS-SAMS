@@ -807,10 +807,15 @@ nav button svg:last-child:not(:first-child) {
 }
 .results td > .actions {
   flex-wrap: nowrap;
+  gap: 0;
   width: max-content;
 }
 .results td > .actions > button {
   flex-shrink: 0;
+}
+.results td > .actions > .icon > svg {
+  width: 20px;
+  height: 20px;
 }
 .table-scroll {
   overflow: auto;
@@ -2128,12 +2133,6 @@ summary {
   overflow-wrap: anywhere;
 }
 
-.person-export-actions {
-  display: flex;
-  justify-content: flex-end;
-  margin-bottom: 16px;
-}
-
 .filters input,
 .filters select,
 .report-controls input,
@@ -2291,9 +2290,6 @@ textarea {
   }
   .modal-actions button {
     flex: 1;
-  }
-  .person-export-actions button {
-    width: 100%;
   }
 }
 

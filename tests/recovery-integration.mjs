@@ -482,7 +482,8 @@ try {
   );
   assert.equal(
     await page
-      .getByRole("button", { name: "ส่งออก PDF รายบุคคล", exact: true })
+      .getByRole("dialog")
+      .getByRole("button", { name: /^ส่งออก PDF รายบุคคล/ })
       .count(),
     0,
   );

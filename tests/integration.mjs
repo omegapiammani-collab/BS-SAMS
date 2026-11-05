@@ -684,16 +684,9 @@ try {
       .getByRole("button", { name: "ละทิ้งการเปลี่ยนแปลง", exact: true })
       .click();
     await page.getByRole("dialog").waitFor({ state: "hidden" });
-    await page
-      .getByRole("button", { name: "ดู บุคคลทดสอบ", exact: true })
-      .click();
-    assert.equal(
-      await page.getByRole("button", { name: /^เพิ่มคำขอ / }).count(),
-      0,
-    );
     const personDownload = page.waitForEvent("download");
     await page
-      .getByRole("button", { name: "ส่งออก PDF รายบุคคล", exact: true })
+      .getByRole("button", { name: /^ส่งออก PDF รายบุคคล บุคคลทดสอบ / })
       .click();
     const personPdf = await personDownload;
     assert.ok(personPdf.suggestedFilename().endsWith(".pdf"));
@@ -715,6 +708,13 @@ try {
       1,
     );
 
+    await page
+      .getByRole("button", { name: "ดู บุคคลทดสอบ", exact: true })
+      .click();
+    assert.equal(
+      await page.getByRole("button", { name: /^เพิ่มคำขอ / }).count(),
+      0,
+    );
     await page.locator(".request-group > summary").nth(0).click();
     await page
       .getByRole("button", { name: "ไปที่คำขอที่ 1", exact: true })
