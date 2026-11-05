@@ -1,7 +1,8 @@
 import { age, categories } from "./domain.js";
 import { formatThaiDate } from "./thai-date.js";
 export const registryPdfOptions = {
-  columnWeights: [1, 1, 1, 1.5, 1.2, 0.6, 0.8, 0.6, 1, 1.9, 1.7, 1.5],
+  wrapChildAssistance: true,
+  columnWeights: [1, 1, 1, 1.5, 1.2, 0.6, 0.8, 0.6, 1, 1.3, 2.4, 1.7, 1.5],
 };
 
 export function registryExportRows(people, filters = {}) {
@@ -16,6 +17,7 @@ export function registryExportRows(people, filters = {}) {
       "บ้านเลขที่",
       "หมู่ที่",
       "โทรศัพท์",
+      "หมวดหมู่",
       "ประเภทความช่วยเหลือ",
       "ประเภทข้อมูล",
       "ยื่นคำร้องผ่านระบบ",
@@ -27,10 +29,13 @@ export function registryExportRows(people, filters = {}) {
           filters.cat === "" ||
           String(request.category) === String(filters.cat),
       );
-      const types = [
+      const categoryNames = [
         ...new Set(
           selected.map((request) => categories[Number(request.category)]),
         ),
+      ];
+      const types = [
+        ...new Set(selected.map((request) => request.type).filter(Boolean)),
       ];
       const parent = [
         person.title,
@@ -42,6 +47,7 @@ export function registryExportRows(people, filters = {}) {
         person.house || "",
         person.village,
         person.phone,
+        categoryNames.join("\n"),
         types.join("\n"),
         "ผู้ยื่นคำขอ",
         (person.submissionChannels || []).join("\n"),
@@ -57,6 +63,7 @@ export function registryExportRows(people, filters = {}) {
           "",
           "",
           "",
+          categories[Number(request.category)],
           request.type,
           "บุตรหรือเด็กในความอุปการะ",
           "",

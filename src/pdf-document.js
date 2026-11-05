@@ -1,7 +1,11 @@
 export function pdfDocument(
   rows,
   title,
-  { orientation = "landscape", columnWeights } = {},
+  {
+    orientation = "landscape",
+    columnWeights,
+    wrapChildAssistance = false,
+  } = {},
 ) {
   const columns = Math.max(1, ...rows.map((row) => row.length));
   const groups = [];
@@ -60,10 +64,12 @@ export function pdfDocument(
             ),
             body: group.map((row, index) =>
               Array.from({ length: count }, (_, col) => ({
-                text: String(row[col] ?? "").replaceAll(
-                  "เงินสงเคราะห์เด็กในครอบครัวยากจน",
-                  "เงินสงเคราะห์เด็กในครอบครัว\nยากจน",
-                ),
+                text: wrapChildAssistance
+                  ? String(row[col] ?? "").replaceAll(
+                      "เงินสงเคราะห์เด็กในครอบครัวยากจน",
+                      "เงินสงเคราะห์เด็กในครอบครัว\nยากจน",
+                    )
+                  : String(row[col] ?? ""),
                 bold: index === 0,
                 fillColor: index === 0 ? "#edf4fc" : null,
                 margin: [2, 4, 2, 4],

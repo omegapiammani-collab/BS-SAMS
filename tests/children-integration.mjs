@@ -245,6 +245,13 @@ try {
       assert.ok(!sheet.getRow(1).values.includes("ผู้ยื่นคำขอและคำขอ"));
       assert.equal(cell(3, "ประเภทข้อมูล"), "บุตรหรือเด็กในความอุปการะ");
       assert.equal(cell(3, "ประเภทความช่วยเหลือ"), childAssistanceType);
+      assert.equal(cell(2, "ประเภทความช่วยเหลือ"), childAssistanceType);
+      assert.equal(cell(2, "หมวดหมู่"), "เงินสงเคราะห์");
+      assert.equal(cell(3, "หมวดหมู่"), "เงินสงเคราะห์");
+      assert.equal(
+        sheet.getRow(1).values.indexOf("หมวดหมู่") + 1,
+        sheet.getRow(1).values.indexOf("ประเภทความช่วยเหลือ"),
+      );
       if (extension === "xlsx") assert.equal(typeof cell(3, "อายุ"), "number");
     }
   }

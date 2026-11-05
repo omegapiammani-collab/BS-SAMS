@@ -197,6 +197,7 @@ export function summarize(people, from, to) {
   const applicants = new Map(monthly.map((m) => [m.month, new Set()]));
   const recipients = new Map(monthly.map((m) => [m.month, new Set()]));
   const helpedPeople = new Set();
+  const assistanceTypes = categories.map(() => new Map());
   const result = {
     people: 0,
     requests: 0,
@@ -209,6 +210,7 @@ export function summarize(people, from, to) {
     unknownAge: 0,
     submissionChannels: { care: 0, hotline: 0, both: 0, unspecified: 0 },
     category: categories.map(() => 0),
+    assistanceTypes: [],
     ages: [0, 0, 0, 0],
     villages: {},
     monthly,
@@ -238,8 +240,14 @@ export function summarize(people, from, to) {
       if (a !== null) result.ages[a < 18 ? 0 : a < 26 ? 1 : a < 60 ? 2 : 3]++;
       else result.unknownAge++;
       result.villages[p.village] = (result.villages[p.village] || 0) + 1;
-      for (let c = 0; c < 7; c++)
-        if (rs.some((r) => Number(r.category) === c)) result.category[c]++;
+      for (let c = 0; c < categories.length; c++) {
+        const types = new Set(
+          rs.filter((r) => Number(r.category) === c).map((r) => r.type || ""),
+        );
+        if (types.size) result.category[c]++;
+        for (const type of types)
+          assistanceTypes[c].set(type, (assistanceTypes[c].get(type) || 0) + 1);
+      }
       for (const r of rs) {
         const key = r.date.slice(0, 7);
         months.get(key).requested++;
@@ -262,6 +270,9 @@ export function summarize(people, from, to) {
   }
   result.amount /= 100;
   result.helpedPeople = helpedPeople.size;
+  result.assistanceTypes = assistanceTypes.flatMap((types, category) =>
+    Array.from(types, ([type, people]) => ({ category, type, people })),
+  );
   for (const m of monthly) {
     m.amount /= 100;
     m.requestedPeople = applicants.get(m.month).size;
