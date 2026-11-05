@@ -786,11 +786,8 @@ td strong {
   color: #344c6c;
   font-weight: 500;
 }
-tbody tr:nth-child(even) {
-  background: #f8fafc;
-}
-tbody tr:hover {
-  background: #f1f6fc;
+tbody tr {
+  background: white;
 }
 .th-button {
   border: 0;
@@ -2283,12 +2280,6 @@ textarea[aria-invalid="true"] {
   .table-scroll td:first-child {
     background: white;
     min-width: 130px;
-  }
-  .table-scroll tbody tr:nth-child(even) td:first-child {
-    background: #f8fafc;
-  }
-  .table-scroll tbody tr:hover td:first-child {
-    background: #f1f6fc;
   }
 }
 
