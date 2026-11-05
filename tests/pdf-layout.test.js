@@ -213,3 +213,105 @@ test("registry PDF aligns each category with its type after a preceding type wra
     rmSync(directory, { recursive: true, force: true });
   }
 });
+
+test("multi-page registry PDF keeps each identity and paired assistance together exactly once", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "bs-sams-pdf-pages-"));
+  try {
+    const people = Array.from({ length: 120 }, (_, index) => ({
+      title: "นาย",
+      first: `PDFทดสอบ${String(index).padStart(6, "0")}`,
+      last: "ทดสอบประสิทธิภาพ",
+      birth: "1990-01-01",
+      village: 1,
+      requests: [
+        { category: 0, type: "เงินสงเคราะห์ทดสอบ" },
+        { category: 1, type: "ซ่อมบ้านทดสอบ" },
+      ],
+    }));
+    const fonts = { Sarabun: { normal: "regular.ttf", bold: "bold.ttf" } };
+    const vfs = Object.fromEntries(
+      [
+        ["regular.ttf", "Sarabun-Regular.ttf"],
+        ["bold.ttf", "Sarabun-Bold.ttf"],
+      ].map(([key, file]) => [
+        key,
+        readFileSync(
+          new URL(`../src/assets/fonts/${file}`, import.meta.url),
+        ).toString("base64"),
+      ]),
+    );
+    const buffer = await new Promise((resolve) =>
+      pdfMake
+        .createPdf(
+          pdfDocument(
+            registryExportRows(people),
+            "ทะเบียน",
+            registryPdfOptions,
+          ),
+          undefined,
+          fonts,
+          vfs,
+        )
+        .getBuffer(resolve),
+    );
+    const file = join(directory, "registry.pdf");
+    writeFileSync(file, buffer);
+    const pages = execFileSync("pdftotext", ["-raw", file, "-"], {
+      encoding: "utf8",
+    }).split("\f");
+    const names = [];
+    for (const page of pages) {
+      const text = page.replace(/\s/g, "");
+      const matches = [...text.matchAll(/PDFทดสอบ[0-9]{6}/g)].map(
+        (match) => match[0],
+      );
+      names.push(...matches);
+      assert.equal(
+        (text.match(/เงินสงเคราะห์ทดสอบ/g) || []).length,
+        matches.length,
+      );
+      assert.equal((text.match(/ซ่อมบ้านทดสอบ/g) || []).length, matches.length);
+    }
+    assert.equal(names.length, people.length);
+    assert.equal(new Set(names).size, people.length);
+    for (const person of people) assert.ok(names.includes(person.first));
+    assert.ok(
+      pages.length <= 12,
+      "No excessive mostly-empty pages from row spans",
+    );
+    const history = {
+      ...people[0],
+      requests: Array.from({ length: 200 }, (_, index) => ({
+        category: 0,
+        type: `TYPE${String(index).padStart(3, "0")} ${"ช่วยเหลือ".repeat(25)}`,
+      })),
+    };
+    const longBuffer = await new Promise((resolve) =>
+      pdfMake
+        .createPdf(
+          pdfDocument(
+            registryExportRows([history]),
+            "ประวัติยาว",
+            registryPdfOptions,
+          ),
+          undefined,
+          fonts,
+          vfs,
+        )
+        .getBuffer(resolve),
+    );
+    writeFileSync(file, longBuffer);
+    const historyText = execFileSync("pdftotext", ["-raw", file, "-"], {
+      encoding: "utf8",
+    }).replace(/\s/g, "");
+    const types = historyText.match(/TYPE[0-9]{3}/g) || [];
+    assert.equal(
+      types.length,
+      200,
+      "Long histories continue onto new pages without clipping",
+    );
+    assert.equal(new Set(types).size, 200);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});

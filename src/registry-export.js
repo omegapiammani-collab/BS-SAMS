@@ -2,6 +2,7 @@ import { age, categories } from "./domain.js";
 import { formatThaiDate } from "./thai-date.js";
 import { matchesRequestFilters } from "./request-filters.js";
 export const registryPdfOptions = {
+  dontBreakRows: true,
   wrapChildAssistance: true,
   thaiWordWrapColumns: [9, 10],
   pairedColumns: [9, 10],

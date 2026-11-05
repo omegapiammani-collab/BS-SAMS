@@ -975,15 +975,15 @@ try {
         document.querySelector('[aria-label="ตารางรายละเอียดรายเดือน"]')
           .scrollLeft > 0,
     );
+    const mobileColumn = await monthlyScroll.evaluate((el) => ({
+      left: el.querySelector("tbody tr td").getBoundingClientRect().left,
+      scroll: el.scrollLeft,
+      position: getComputedStyle(el.querySelector("tbody tr td")).position,
+    }));
+    assert.notEqual(mobileColumn.position, "sticky");
     assert.ok(
-      Math.abs(
-        (await monthlyScroll
-          .locator("tbody tr")
-          .first()
-          .locator("td")
-          .first()
-          .evaluate((el) => el.getBoundingClientRect().left)) - firstCellLeft,
-      ) < 2,
+      Math.abs(firstCellLeft - mobileColumn.left - mobileColumn.scroll) < 2,
+      "Mobile first column must move with the rest of the table",
     );
     await monthlyScroll.evaluate((el) => {
       el.scrollLeft = 0;
