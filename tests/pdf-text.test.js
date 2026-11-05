@@ -34,3 +34,12 @@ test("PDF word wrapping preserves dates, numbers, spaces, explicit newlines and 
   const mixed = "พม. CARE\nสายด่วน พม. 1300";
   assert.equal(visibleText(pdfText(mixed, { thaiWordWrap: true })), mixed);
 });
+
+test("configured PDF phrases begin on a new line without adding blank lines", () => {
+  const options = { thaiWordWrap: true, lineBreakBefore: ["คนพิการ"] };
+  const type = "เงินสงเคราะห์และฟื้นฟูสมรรถภาพคนพิการ";
+  const expected = "เงินสงเคราะห์และฟื้นฟูสมรรถภาพ\nคนพิการ";
+  assert.equal(visibleText(pdfText(type, options)), expected);
+  assert.equal(visibleText(pdfText(expected, options)), expected);
+  assert.equal(visibleText(pdfText("คนพิการ", options)), "คนพิการ");
+});

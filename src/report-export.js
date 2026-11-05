@@ -41,7 +41,14 @@ export function reportExport(sum, config, range, type, section) {
       : [[category, "", sum.category[index] || 0]];
   });
   return {
-    ...(village ? { pdfOptions: { thaiWordWrapColumns: [2] } } : {}),
+    ...(village
+      ? {
+          pdfOptions: {
+            thaiWordWrapColumns: [2],
+            lineBreakBefore: ["คนพิการ"],
+          },
+        }
+      : {}),
     name: village
       ? "จำนวนผู้ประสบปัญหารายหมู่บ้าน"
       : "จำนวนผู้ประสบปัญหาตามประเภทความช่วยเหลือ",

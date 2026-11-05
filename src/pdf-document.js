@@ -9,6 +9,7 @@ export function pdfDocument(
     wrapChildAssistance = false,
     thaiWordWrapColumns = [],
     pairedColumns = [],
+    lineBreakBefore = [],
   } = {},
 ) {
   const columns = Math.max(1, ...rows.map((row) => row.length));
@@ -87,6 +88,7 @@ export function pdfDocument(
                       pairs.has(col) ? pairs.get(col)[pairIndex] : row[col],
                       {
                         wrapChildAssistance,
+                        lineBreakBefore,
                         thaiWordWrap:
                           index > 0 && thaiWordWrapColumns.includes(col),
                       },

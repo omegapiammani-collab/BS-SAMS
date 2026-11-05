@@ -5,14 +5,22 @@ const thaiScript = /\p{Script=Thai}/u;
 // empty runs allow a new line between adjacent Thai words without adding glyphs.
 export function pdfText(
   value,
-  { wrapChildAssistance = false, thaiWordWrap = false } = {},
+  {
+    wrapChildAssistance = false,
+    thaiWordWrap = false,
+    lineBreakBefore = [],
+  } = {},
 ) {
-  const text = wrapChildAssistance
+  let text = wrapChildAssistance
     ? String(value ?? "").replaceAll(
         "เงินสงเคราะห์เด็กในครอบครัวยากจน",
         "เงินสงเคราะห์เด็กในครอบครัว\nยากจน",
       )
     : String(value ?? "");
+  for (const phrase of lineBreakBefore)
+    text = text.replaceAll(phrase, (match, offset, source) =>
+      offset === 0 || source[offset - 1] === "\n" ? match : "\n" + match,
+    );
   if (!thaiWordWrap || !thaiScript.test(text)) return text;
   const output = [];
   let previousWasThai = false;
