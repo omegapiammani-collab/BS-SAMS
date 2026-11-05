@@ -521,7 +521,7 @@ export function Registry({ user, config, refresh }) {
                                 {p.title}
                                 {p.first} {p.last}
                               </strong>
-                              <small className="block muted">
+                              <small className="block muted registry-person-age">
                                 อายุ {age(p.birth) ?? "ไม่ระบุ"} ปี
                               </small>
                               {childCount > 0 && (
@@ -534,7 +534,7 @@ export function Registry({ user, config, refresh }) {
                         </td>
                         <td>
                           ม.{p.village}
-                          <small className="block muted">
+                          <small className="block muted registry-village-name">
                             บ้าน
                             {
                               config.villages.find((v) => v.id === p.village)

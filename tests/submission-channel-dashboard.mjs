@@ -83,7 +83,7 @@ try {
     .locator(".donut")
     .evaluate((el) => getComputedStyle(el).backgroundImage);
   for (const color of [
-    "rgb(41, 36, 92)",
+    "rgb(239, 144, 32)",
     "rgb(57, 166, 221)",
     "rgb(0, 175, 62)",
   ])
@@ -149,7 +149,7 @@ try {
   );
   assert.deepEqual(errors, []);
   console.log(
-    "PASS: real summary API, exclusive 3-way counts, repeated requests counted once, purple/blue/green, year filter, empty state, desktop/mobile, preserved status chart, no runtime errors",
+    "PASS: real summary API, exclusive 3-way counts, repeated requests counted once, orange/blue/green, year filter, empty state, desktop/mobile, preserved status chart, no runtime errors",
   );
 } finally {
   await browser?.close();

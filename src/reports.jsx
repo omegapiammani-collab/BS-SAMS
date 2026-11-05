@@ -54,7 +54,7 @@ function SubmissionChannelsChart({ counts }) {
   const careEnd = total ? (counts.care / total) * 100 : 0;
   const hotlineEnd = total ? ((counts.care + counts.hotline) / total) * 100 : 0;
   const groups = [
-    ["var(--blue)", submissionChannels[0], counts.care],
+    ["var(--orange)", submissionChannels[0], counts.care],
     ["var(--brand-sky)", submissionChannels[1], counts.hotline],
     ["var(--chart-success)", "ทั้งสองช่องทาง", counts.both],
   ];
@@ -74,7 +74,7 @@ function SubmissionChannelsChart({ counts }) {
           aria-label={`ผู้ระบุช่องทางทั้งหมด ${n(total)} คน`}
           style={{
             background: total
-              ? `conic-gradient(var(--blue) 0 ${careEnd}%,var(--brand-sky) ${careEnd}% ${hotlineEnd}%,var(--chart-success) ${hotlineEnd}% 100%)`
+              ? `conic-gradient(var(--orange) 0 ${careEnd}%,var(--brand-sky) ${careEnd}% ${hotlineEnd}%,var(--chart-success) ${hotlineEnd}% 100%)`
               : "var(--chart-pending)",
           }}
         >
