@@ -23,7 +23,7 @@ export function registryExportRows(people, filters = {}) {
       "หมวดหมู่",
       "ประเภทความช่วยเหลือ",
       "ประเภทข้อมูล",
-      "ยื่นคำร้องผ่านระบบ",
+      "แหล่งที่มาของเคส",
     ],
     ...people.flatMap((person) => {
       const selected = person.requests.filter((request) =>

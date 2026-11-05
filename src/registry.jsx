@@ -328,7 +328,7 @@ export function Registry({ user, config, refresh }) {
               ))}
             </Select>
             <Select
-              label="ยื่นคำร้องผ่านระบบ"
+              label="แหล่งที่มาของเคส"
               value={channel}
               onChange={(e) => setChannel(e.target.value)}
             >
@@ -1263,7 +1263,7 @@ function PersonEditor({
                 </div>
               </Field>
               <fieldset className="submission-channels">
-                <legend>ยื่นคำร้องผ่านระบบ</legend>
+                <legend>แหล่งที่มาของเคส</legend>
                 <div className="checkbox-grid">
                   {submissionChannels.map((channel) => (
                     <label key={channel}>

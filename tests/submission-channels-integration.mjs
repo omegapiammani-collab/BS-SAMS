@@ -114,7 +114,7 @@ try {
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.readFile(excelFile);
   const sheet = workbook.worksheets[0];
-  const channelColumn = sheet.getRow(1).values.indexOf("ยื่นคำร้องผ่านระบบ");
+  const channelColumn = sheet.getRow(1).values.indexOf("แหล่งที่มาของเคส");
   assert.ok(channelColumn > 0);
   assert.equal(sheet.getColumn(channelColumn).alignment.wrapText, true);
   assert.ok(sheet.getRow(2).height >= 36);
@@ -164,7 +164,7 @@ try {
       .replace(/[\s\u200b]/g, "")
       .replace(/ำา/g, "ำ");
     assert.equal(text.includes("ไม่ระบุ"), false);
-    for (const label of ["ยื่นคำร้องผ่านระบบ", ...submissionChannels, "001/2"])
+    for (const label of ["แหล่งที่มาของเคส", ...submissionChannels, "001/2"])
       assert.ok(text.includes(label.replace(/\s/g, "")), label);
   }
   await checkPdf(

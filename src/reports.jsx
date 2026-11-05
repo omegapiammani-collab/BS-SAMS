@@ -64,7 +64,7 @@ function SubmissionChannelsChart({ counts }) {
       aria-labelledby="submission-channel-title"
     >
       <div className="panel-title">
-        <h2 id="submission-channel-title">ยื่นคำร้องผ่านระบบ</h2>
+        <h2 id="submission-channel-title">แหล่งที่มาของเคส</h2>
         <span className="small muted">หน่วย: คน</span>
       </div>
       <div className="donut-layout">

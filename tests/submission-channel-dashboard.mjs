@@ -60,7 +60,7 @@ try {
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto(worker.origin);
   const panel = page.getByRole("region", {
-    name: "ยื่นคำร้องผ่านระบบ",
+    name: "แหล่งที่มาของเคส",
     exact: true,
   });
   await expect(panel.getByRole("img")).toHaveAttribute(

@@ -98,7 +98,7 @@ test("missing individual PDF fields remain blank while real values are retained"
     "วันเกิด",
     "อายุ",
     "สถานภาพสมรส",
-    "ยื่นคำร้องผ่านระบบ",
+    "แหล่งที่มาของเคส",
     "โทรศัพท์",
     "รหัสประจำบ้าน",
     "บ้านเลขที่",

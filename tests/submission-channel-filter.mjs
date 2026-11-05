@@ -55,7 +55,7 @@ try {
     .click();
   const count = (value) =>
     page.getByText(`ทั้งหมด ${value} รายการ`, { exact: true });
-  const select = page.getByLabel("ยื่นคำร้องผ่านระบบ", { exact: true });
+  const select = page.getByLabel("แหล่งที่มาของเคส", { exact: true });
   const search = page.getByRole("button", { name: "ค้นหา", exact: true });
   await expect(count(6)).toBeVisible();
   assert.deepEqual(await select.locator("option").allTextContents(), [

@@ -29,11 +29,11 @@ test("submission channels accept old records, no selection, either or both choic
     assert.equal(validateDraftData(p), true);
     const text = selection?.join("\n") || "";
     assert.deepEqual(
-      personExport(p, defaultConfig).find((r) => r[0] === "ยื่นคำร้องผ่านระบบ"),
-      ["ยื่นคำร้องผ่านระบบ", text],
+      personExport(p, defaultConfig).find((r) => r[0] === "แหล่งที่มาของเคส"),
+      ["แหล่งที่มาของเคส", text],
     );
     const rows = registryExportRows([p]);
-    assert.equal(rows[1][rows[0].indexOf("ยื่นคำร้องผ่านระบบ")], text);
+    assert.equal(rows[1][rows[0].indexOf("แหล่งที่มาของเคส")], text);
   }
 });
 
