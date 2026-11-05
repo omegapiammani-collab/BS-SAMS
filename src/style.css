@@ -462,8 +462,18 @@ nav button svg:last-child:not(:first-child) {
   text-align: right;
 }
 @media (min-width: 1024px) {
+  .bars {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr) 25px;
+    column-gap: 8px;
+    row-gap: 19px;
+    margin: 19px 0;
+  }
   .bars .bar-row {
-    grid-template-columns: 250px minmax(0, 1fr) 25px;
+    grid-column: 1 / -1;
+    grid-template-columns: subgrid;
+    column-gap: 8px;
+    margin: 0;
   }
   .bars .bar-row > span {
     white-space: nowrap;
@@ -561,8 +571,18 @@ nav button svg:last-child:not(:first-child) {
   height: 12px;
 }
 @media (min-width: 601px) {
+  .village-bars {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr) 26px;
+    column-gap: 8px;
+    row-gap: 16px;
+    margin: 16px 0;
+  }
   .dashboard-grid .village-bars > div {
-    grid-template-columns: 200px minmax(0, 1fr) 26px;
+    grid-column: 1 / -1;
+    grid-template-columns: subgrid;
+    column-gap: 8px;
+    margin: 0;
   }
   .village-bars > div > span {
     white-space: nowrap;
