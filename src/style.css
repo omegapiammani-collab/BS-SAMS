@@ -1030,6 +1030,8 @@ dialog {
 }
 dialog.wide {
   width: min(960px, calc(100vw - 30px));
+  scroll-padding-block: calc(var(--dialog-header-height, 0px) + 12px)
+    calc(var(--dialog-actions-height, 0px) + 12px);
 }
 dialog::backdrop {
   background: #18314e80;

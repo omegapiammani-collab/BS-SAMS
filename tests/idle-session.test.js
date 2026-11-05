@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   IDLE_TIMEOUT_MS,
+  endIdleSession,
   resetIdleSession,
   watchIdleSession,
 } from "../src/idle-session.js";
@@ -193,4 +194,16 @@ test("write-only storage failures do not restore an old expired marker", () => {
   assert.equal(expired, false);
   s.advance(IDLE_TIMEOUT_MS);
   assert.equal(expired, true);
+});
+
+test("manual logout marks the shared session expired for other tabs and reloads", () => {
+  const s = setup();
+  s.start();
+  endIdleSession(1, s.storage);
+  const event = new Event("storage");
+  event.key = "bs-sams:idle-session:1";
+  s.target.dispatchEvent(event);
+  assert.equal(s.expirations, 1);
+  s.start();
+  assert.equal(s.expirations, 2);
 });

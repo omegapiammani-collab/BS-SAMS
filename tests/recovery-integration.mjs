@@ -504,6 +504,10 @@ try {
   );
   // Returning all fields to their original values must also update the stored draft.
   await page.getByLabel("ชื่อ *", { exact: true }).fill("ลองย้อนค่าร่าง");
+  await expect(page.locator(".draft-status")).toContainText(
+    "เก็บร่างล่าสุดแล้ว",
+    { timeout: 15000 },
+  );
   await expect
     .poll(
       async () =>

@@ -286,6 +286,11 @@ export async function testFirefox({
     entry.status = "passed";
     return entry;
   } catch (error) {
+    if (session) {
+      try {
+        await screenshot("firefox-failure.png");
+      } catch {}
+    }
     entry.status = "failed";
     entry.error = error.message;
     error.compatibilityEntry = entry;

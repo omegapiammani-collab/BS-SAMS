@@ -1,5 +1,11 @@
 import { DateDraftContext } from "./date-draft-context.js";
-import React, { useEffect, useRef, useState, useContext } from "react";
+import React, {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  useContext,
+} from "react";
 import { CalendarDays, X, ChevronLeft, ChevronRight } from "lucide-react";
 import { thailandDate } from "./money.js";
 import { calendarDays, shiftMonth, thaiMonths } from "./thai-calendar.js";
@@ -65,6 +71,17 @@ export function ThaiDateInput({
     setPosition(calendarPosition(ref.current));
     popup.current.showPopover();
   }
+  useLayoutEffect(() => {
+    if (!popup.current?.matches(":popover-open")) return;
+    const measured = calendarPosition(ref.current, popup.current.offsetHeight);
+    setPosition((previous) =>
+      previous.left === measured.left &&
+      previous.top === measured.top &&
+      previous.width === measured.width
+        ? previous
+        : measured,
+    );
+  });
   useEffect(() => {
     function reposition() {
       if (popup.current?.matches(":popover-open"))

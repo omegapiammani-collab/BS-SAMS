@@ -5,6 +5,7 @@ export function useServerDraft({ data, dirty, readonly, recovery, ownerId }) {
   const version = useRef(recovery?.version || 0);
   const queue = useRef(Promise.resolve());
   const unconfirmed = useRef(null);
+  const savedData = useRef(recovery ? JSON.stringify(recovery.data) : null);
   const active = useRef(true);
   useEffect(() => {
     active.current = true;
@@ -58,6 +59,7 @@ export function useServerDraft({ data, dirty, readonly, recovery, ownerId }) {
           data: value,
         });
       }
+      savedData.current = JSON.stringify(value);
       setStatus({
         state: "saved",
         updatedAt: saved.updatedAt,
@@ -122,8 +124,12 @@ export function useServerDraft({ data, dirty, readonly, recovery, ownerId }) {
   function finish() {
     active.current = false;
   }
+  const pending =
+    !readonly &&
+    ((status.state === "idle" && dirty) ||
+      (status.state === "saved" && savedData.current !== JSON.stringify(data)));
   return {
-    status,
+    status: pending ? { state: "saving" } : status,
     flush,
     discard,
     finish,

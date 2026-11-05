@@ -50,6 +50,10 @@ export function resetIdleSession(
   writeActivity(storage, keyFor(userId), String(now));
 }
 
+export function endIdleSession(userId, storage = browserStorage()) {
+  writeActivity(storage, keyFor(userId), "expired");
+}
+
 // Share the deadline across tabs and preserve it across page reloads.
 export function watchIdleSession(
   userId,
@@ -76,7 +80,7 @@ export function watchIdleSession(
     if (expired) return;
     expired = true;
     cancel(timer);
-    writeActivity(storage, key, "expired");
+    endIdleSession(userId, storage);
     onExpire();
   }
   function check() {

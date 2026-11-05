@@ -107,9 +107,32 @@ export function Modal({
   const ref = React.useRef();
   const titleId = React.useId();
   React.useEffect(() => {
-    ref.current.showModal();
-    return () => ref.current?.close();
-  }, []);
+    const dialog = ref.current;
+    dialog.showModal();
+    if (!wide) return () => dialog.close();
+    const updateInsets = () => {
+      const header = dialog.querySelector(":scope > .modal-head");
+      const actions = dialog.querySelector(":scope > form > .modal-actions");
+      dialog.style.setProperty(
+        "--dialog-header-height",
+        `${header?.getBoundingClientRect().height || 0}px`,
+      );
+      dialog.style.setProperty(
+        "--dialog-actions-height",
+        `${actions?.getBoundingClientRect().height || 0}px`,
+      );
+    };
+    const observer = new ResizeObserver(updateInsets);
+    for (const element of dialog.querySelectorAll(
+      ":scope > .modal-head, :scope > form > .modal-actions",
+    ))
+      observer.observe(element);
+    updateInsets();
+    return () => {
+      observer.disconnect();
+      dialog.close();
+    };
+  }, [wide]);
   return (
     <dialog
       ref={ref}

@@ -1,5 +1,5 @@
 import { AccountMenu } from "./account-menu.jsx";
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   LayoutDashboard,
@@ -28,7 +28,11 @@ import "@fontsource/sarabun/500.css";
 import "@fontsource/sarabun/600.css";
 import "@fontsource/sarabun/700.css";
 import { api } from "./api";
-import { resetIdleSession, watchIdleSession } from "./idle-session.js";
+import {
+  endIdleSession,
+  resetIdleSession,
+  watchIdleSession,
+} from "./idle-session.js";
 import { defaultConfig, fiscalYear, fiscalRange } from "./domain";
 import { Field, ErrorBox } from "./ui";
 import { Dashboard, Reports } from "./reports";
@@ -223,14 +227,21 @@ function App() {
     [notice, setNotice] = useState("");
   const [year, setYear] = useState(fiscalYear()),
     [range, setRange] = useState(fiscalRange(fiscalYear()));
+  const clearSession = useCallback(() => {
+    setUser(null);
+    setPage("dashboard");
+    setMenu(false);
+    setPasswordOpen(false);
+    setNotice("");
+    setError("");
+  }, []);
   useEffect(() => {
     api("/me")
       .then(setUser)
       .catch(() => setUser(null));
-    const expired = () => setUser(null);
-    window.addEventListener("session-expired", expired);
-    return () => window.removeEventListener("session-expired", expired);
-  }, []);
+    window.addEventListener("session-expired", clearSession);
+    return () => window.removeEventListener("session-expired", clearSession);
+  }, [clearSession]);
   useEffect(() => {
     if (user && !user.mustChange)
       api("/config")
@@ -241,15 +252,10 @@ function App() {
   useEffect(() => {
     if (!userId) return;
     return watchIdleSession(userId, () => {
-      setUser(null);
-      setPage("dashboard");
-      setMenu(false);
-      setPasswordOpen(false);
-      setNotice("");
-      setError("");
+      clearSession();
       api("/logout", "POST", {}).catch(() => {});
     });
-  }, [userId]);
+  }, [userId, clearSession]);
   if (user === undefined) return <div className="loading">กำลังโหลดระบบ…</div>;
   if (!user || user.mustChange)
     return (
@@ -269,9 +275,9 @@ function App() {
       />
     );
   async function logout() {
-    await api("/logout", "POST", {});
-    setUser(null);
-    setPage("dashboard");
+    endIdleSession(userId);
+    clearSession();
+    await api("/logout", "POST", {}).catch(() => {});
   }
   return (
     <div className="app">

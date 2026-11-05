@@ -841,9 +841,15 @@ try {
     assert.ok(!registryPdfText.includes("สถานะ"));
     assert.ok(!registryPdfText.includes(p.id));
 
-    assert.equal(book.worksheets[0].getRow(2).getCell(3).value, "บุคคลทดสอบ");
+    const registrySheet = book.worksheets[0];
+    const registryHeaders = registrySheet.getRow(1).values;
     assert.equal(
-      typeof book.worksheets[0].getRow(2).getCell(7).value,
+      registrySheet.getRow(2).getCell(registryHeaders.indexOf("ชื่อ")).value,
+      "บุคคลทดสอบ",
+    );
+    assert.equal(
+      typeof registrySheet.getRow(2).getCell(registryHeaders.indexOf("อายุ"))
+        .value,
       "number",
     );
     await page
