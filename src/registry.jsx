@@ -581,12 +581,9 @@ export function Registry({ user, config, refresh }) {
                               {childRequests.map((request) => (
                                 <table
                                   className="registry-children-table"
+                                  aria-label="รายชื่อบุตรหรือเด็กในความอุปการะ"
                                   key={request.id}
                                 >
-                                  <caption>
-                                    บุตรหรือเด็กในความอุปการะ · {request.type} ·
-                                    ยื่นคำขอ {formatThaiDate(request.date)}
-                                  </caption>
                                   <thead>
                                     <tr>
                                       <th scope="col">คำนำหน้า</th>
