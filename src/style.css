@@ -9,8 +9,8 @@
   --font-small: 14px;
   --font-caption: 13px;
   --font-heading: 20px;
-  --text-primary: #333c41;
-  --text-secondary: #525b60;
+  --text-primary: #000000;
+  --text-secondary: #000000;
   --blue: #29245c;
   --navy: #29245c;
   --green: #007b2c;
@@ -22,7 +22,7 @@
   --brand-red: #e5352b;
   --orange: #ef9020;
   --red: #9f1f5c;
-  --muted: #525b60;
+  --muted: #000000;
   --border: #dde2e0;
   --control-border: #949483;
   --surface-subtle: #f4f6f5;
@@ -54,12 +54,12 @@ b {
 }
 input::placeholder,
 textarea::placeholder {
-  color: #626b70;
+  color: var(--text-primary);
   opacity: 1;
 }
 ::selection {
   background: #dde8f5;
-  color: #29245c;
+  color: var(--text-primary);
 }
 button,
 input,
@@ -75,7 +75,7 @@ button {
   justify-content: center;
   gap: 8px;
   background: white;
-  color: #333c41;
+  color: var(--text-primary);
   border: 1px solid #dde2e0;
   border-radius: 6px;
   padding: 9px 14px;
@@ -107,7 +107,7 @@ textarea {
   border: 1px solid var(--control-border);
   border-radius: 6px;
   background: #fff;
-  color: #333c41;
+  color: var(--text-primary);
   min-height: 46px;
 }
 textarea {
@@ -191,7 +191,7 @@ small,
   display: flex;
   gap: 12px;
   align-items: center;
-  color: var(--navy);
+  color: var(--text-primary);
   font-size: 23px;
   font-weight: 600;
   padding: 29px 20px;
@@ -258,7 +258,7 @@ nav button svg:last-child:not(:first-child) {
   display: flex;
   gap: 10px;
   background: #f4f6f5;
-  color: #525b60;
+  color: var(--text-primary);
   padding: 15px 10px;
   font-size: var(--font-caption);
   line-height: 1.8;
@@ -290,7 +290,7 @@ nav button svg:last-child:not(:first-child) {
   display: flex;
   align-items: center;
   font-size: var(--font-small);
-  color: #525b60;
+  color: var(--text-primary);
   gap: 16px;
 }
 
@@ -340,7 +340,7 @@ nav button svg:last-child:not(:first-child) {
 }
 .year select {
   min-width: 110px;
-  color: var(--navy);
+  color: var(--text-primary);
   font-weight: 600;
 }
 .metrics {
@@ -377,7 +377,7 @@ nav button svg:last-child:not(:first-child) {
   font-size: 32px;
   display: block;
   margin: 4px 0 12px;
-  color: var(--navy);
+  color: var(--text-primary);
 }
 .metric strong small {
   font-size: var(--font-small);
@@ -453,7 +453,7 @@ nav button svg:last-child:not(:first-child) {
 }
 .bar-row strong {
   font-size: var(--font-caption);
-  color: #596b83;
+  color: var(--text-primary);
   text-align: right;
 }
 .track {
@@ -500,7 +500,7 @@ nav button svg:last-child:not(:first-child) {
 }
 .donut strong {
   font-size: 32px;
-  color: var(--navy);
+  color: var(--text-primary);
 }
 .donut span {
   font-size: var(--font-caption);
@@ -645,7 +645,7 @@ nav button svg:last-child:not(:first-child) {
   gap: 15px;
 }
 .registry-callout h3 {
-  color: #2b507e;
+  color: var(--text-primary);
   margin-bottom: 5px;
 }
 .registry-callout p {
@@ -664,7 +664,7 @@ nav button svg:last-child:not(:first-child) {
 .submission-channels > legend,
 .registry-date-range legend {
   font-weight: 500;
-  color: #5b6d86;
+  color: var(--text-primary);
 }
 .form-grid {
   display: grid;
@@ -813,6 +813,9 @@ nav button svg:last-child:not(:first-child) {
 .results td > .actions > button {
   flex-shrink: 0;
 }
+.results td > .actions > .icon:not(.danger) {
+  color: #55657e;
+}
 .results td > .actions > .icon > svg {
   width: 20px;
   height: 20px;
@@ -831,17 +834,17 @@ table {
 }
 th {
   background: #edf2f9;
-  color: #426187;
+  color: var(--text-primary);
   font-weight: 600;
   padding: 14px 18px;
 }
 td {
   padding: 17px 18px;
   border-bottom: 1px solid #edf1f6;
-  color: #55657e;
+  color: var(--text-primary);
 }
 td strong {
-  color: #344c6c;
+  color: var(--text-primary);
   font-weight: 500;
 }
 tbody tr {
@@ -1080,7 +1083,7 @@ dialog {
   padding: 24px;
   width: min(660px, calc(100vw - 30px));
   max-height: 90vh;
-  color: #263c5a;
+  color: var(--text-primary);
   box-shadow: 0 30px 100px #19314f30;
 }
 dialog.wide {
@@ -1125,7 +1128,7 @@ fieldset:disabled {
   margin-top: 22px;
   border-top: 1px solid var(--border);
   padding-top: 20px;
-  color: var(--navy);
+  color: var(--text-primary);
 }
 .request-card {
   border: 1px solid #dce5f0;
@@ -1202,7 +1205,7 @@ summary {
 .login-form-content {
   width: 100%;
   max-width: 440px;
-  color: #29245c;
+  color: var(--text-primary);
 }
 .login-form h2 {
   font-size: 36px;
@@ -1221,7 +1224,7 @@ summary {
 .login-form label {
   font-size: var(--font-body);
   font-weight: 600;
-  color: #29245c;
+  color: var(--text-primary);
   margin-bottom: 8px;
 }
 .login-form input:not([type="hidden"]):not([type="checkbox"]) {
@@ -1647,7 +1650,7 @@ summary {
 .field > label,
 .submission-channels > legend,
 .registry-date-range legend {
-  color: #50617a;
+  color: var(--text-primary);
 }
 
 .report-metrics {
@@ -1727,7 +1730,7 @@ summary {
   margin-top: 0.25rem;
 }
 .date-help {
-  color: #526174;
+  color: var(--text-primary);
 }
 .date-error {
   color: #9f1f5c;
@@ -1746,7 +1749,7 @@ summary {
   padding: 16px;
 }
 .request-group > summary {
-  color: var(--navy);
+  color: var(--text-primary);
   font-weight: 600;
   cursor: pointer;
 }
@@ -1755,7 +1758,7 @@ summary {
   font-size: var(--font-caption);
   font-weight: 400;
   margin-right: 12px;
-  color: #526174;
+  color: var(--text-primary);
   background: color-mix(
     in srgb,
     var(--category-accent, var(--border)) 12%,
@@ -1782,7 +1785,7 @@ summary {
   background: #f4f6f5;
   overflow: hidden;
   min-width: 0;
-  color: var(--navy);
+  color: var(--text-primary);
 }
 .request-tile:hover {
   background: #eef5fa;
@@ -1818,10 +1821,10 @@ summary {
   justify-content: space-between;
   width: 100%;
   font-size: var(--font-caption);
-  color: #526174;
+  color: var(--text-primary);
 }
 .request-tile-totals strong {
-  color: var(--navy);
+  color: var(--text-primary);
 }
 .request-tile-action {
   display: flex;
@@ -1831,10 +1834,10 @@ summary {
   width: 100%;
   margin-top: auto;
   font-size: var(--font-caption);
-  color: #29245c;
+  color: var(--text-primary);
 }
 .request-group-empty {
-  color: #526174;
+  color: var(--text-primary);
   font-size: var(--font-small);
   margin: 16px 0 0;
 }
@@ -1856,18 +1859,18 @@ summary {
 }
 .request-date {
   font-weight: 600;
-  color: var(--navy);
+  color: var(--text-primary);
 }
 .request-occurrence {
   font-size: var(--font-caption);
-  color: #526174;
+  color: var(--text-primary);
 }
 .request-heading-date {
   display: block;
   margin-top: 6px;
   font-size: var(--font-small);
   font-weight: 400;
-  color: #526174;
+  color: var(--text-primary);
 }
 .thai-date-control {
   position: relative;
@@ -1903,7 +1906,7 @@ summary {
   border-radius: 10px;
   box-shadow: 0 8px 24px #163b7126;
   background: white;
-  color: var(--navy);
+  color: var(--text-primary);
   max-height: calc(100dvh - 24px);
   overflow: auto;
 }
@@ -1941,7 +1944,7 @@ summary {
   height: 40px;
   min-height: 40px;
   font-size: var(--font-small);
-  color: var(--navy);
+  color: var(--text-primary);
 }
 .calendar-grid .outside-month {
   color: var(--text-secondary);
@@ -2038,7 +2041,7 @@ summary {
 .account-identity strong {
   display: block;
   font-size: var(--font-caption);
-  color: var(--navy);
+  color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2428,7 +2431,7 @@ textarea[aria-invalid="true"] {
 }
 .children-toggle {
   flex: 0 0 auto;
-  color: var(--navy);
+  color: var(--text-primary);
   min-width: 44px;
   min-height: 44px;
 }

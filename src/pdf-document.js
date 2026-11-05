@@ -30,7 +30,7 @@ export function pdfDocument(
     defaultStyle: {
       font: "Sarabun",
       fontSize: columns > 6 ? 9 : orientation === "portrait" ? 10 : 11,
-      color: "#20324b",
+      color: "#000000",
     },
     header: { text: title, bold: true, fontSize: 14, margin: [28, 14, 28, 0] },
     footer: (page, pages) => ({
