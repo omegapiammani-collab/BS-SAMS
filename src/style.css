@@ -661,7 +661,8 @@ nav button svg:last-child:not(:first-child) {
   font-size: var(--font-small);
 }
 .field > label,
-.submission-channels > legend {
+.submission-channels > legend,
+.registry-date-range legend {
   font-weight: 500;
   color: #5b6d86;
 }
@@ -712,10 +713,11 @@ nav button svg:last-child:not(:first-child) {
 }
 .registry-layout {
   display: grid;
-  grid-template-columns: 250px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 20px;
 }
 .filters {
+  display: block;
   padding: 20px;
   height: fit-content;
 }
@@ -724,7 +726,50 @@ nav button svg:last-child:not(:first-child) {
   align-items: center;
   gap: 9px;
   font-size: var(--font-body);
-  margin-bottom: 23px;
+  margin-bottom: 20px;
+}
+.registry-filter-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  align-items: end;
+}
+.filters .field {
+  min-width: 0;
+  margin-bottom: 0;
+}
+.registry-date-ranges {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+}
+.registry-date-range legend {
+  padding: 0;
+  margin-bottom: 12px;
+  font-size: var(--font-caption);
+}
+.registry-date-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.filters .date-help {
+  display: none;
+}
+.registry-filter-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 20px;
+}
+.registry-filter-footer .text-button {
+  width: auto;
+  padding: 0;
+  text-align: left;
 }
 .filters .field {
   font-size: var(--font-caption);
@@ -736,9 +781,10 @@ nav button svg:last-child:not(:first-child) {
 .filter-actions {
   display: flex;
   gap: 7px;
-  margin-top: 25px;
+  flex-shrink: 0;
 }
 .filter-actions button {
+  min-width: 96px;
   font-size: var(--font-caption);
   flex: 1;
   padding: 9px;
@@ -1316,8 +1362,11 @@ summary {
     gap: 8px;
     font-size: var(--font-caption);
   }
-  .registry-layout {
-    grid-template-columns: 220px minmax(0, 1fr);
+  .registry-filter-fields {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .registry-filter-fields > .field:first-child {
+    grid-column: span 2;
   }
   .age-grid {
     gap: 10px;
@@ -1355,20 +1404,6 @@ summary {
   }
   .registry-layout {
     grid-template-columns: 1fr;
-  }
-  .filters {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 0 15px;
-  }
-  .filters h2 {
-    grid-column: 1/-1;
-  }
-  .filter-actions {
-    margin-top: 0;
-  }
-  .filters .text-button {
-    padding: 0;
   }
 }
 @media (max-width: 600px) {
@@ -1495,14 +1530,29 @@ summary {
     font-size: var(--font-caption);
     padding: 9px;
   }
-  .filters {
-    grid-template-columns: 1fr;
+  .registry-filter-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .registry-filter-fields > .field:first-child {
+    grid-column: 1 / -1;
+  }
+  .registry-date-ranges {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 20px;
+  }
+  .registry-date-fields {
+    grid-template-columns: minmax(0, 1fr);
   }
   .filters .field {
     font-size: var(--font-caption);
   }
-  .filters .text-button {
-    padding-top: 15px;
+  .registry-filter-footer {
+    flex-direction: column-reverse;
+    align-items: stretch;
+  }
+  .registry-filter-footer .text-button {
+    text-align: center;
+    min-height: 44px;
   }
   .registry-layout {
     gap: 15px;
@@ -1590,7 +1640,8 @@ summary {
   font-size: var(--font-caption);
 }
 .field > label,
-.submission-channels > legend {
+.submission-channels > legend,
+.registry-date-range legend {
   color: #50617a;
 }
 

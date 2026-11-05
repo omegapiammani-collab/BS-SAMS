@@ -1,5 +1,6 @@
 import { age, categories } from "./domain.js";
 import { formatThaiDate } from "./thai-date.js";
+import { matchesRequestFilters } from "./request-filters.js";
 export const registryPdfOptions = {
   wrapChildAssistance: true,
   thaiWordWrapColumns: [9, 10],
@@ -25,11 +26,8 @@ export function registryExportRows(people, filters = {}) {
       "ยื่นคำร้องผ่านระบบ",
     ],
     ...people.flatMap((person) => {
-      const selected = person.requests.filter(
-        (request) =>
-          filters.cat === undefined ||
-          filters.cat === "" ||
-          String(request.category) === String(filters.cat),
+      const selected = person.requests.filter((request) =>
+        matchesRequestFilters(request, filters),
       );
       const assistancePairs = [
         ...new Map(

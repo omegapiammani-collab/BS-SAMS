@@ -82,6 +82,12 @@ const initial = () => ({
 const can = (u, p, v) =>
   u.role === "admin" ||
   (u.permissions.includes(p) && u.villages.includes(Number(v)));
+const emptyDateFilters = {
+  requestFrom: "",
+  requestTo: "",
+  receivedFrom: "",
+  receivedTo: "",
+};
 export function Registry({ user, config, refresh }) {
   const [data, setData] = useState([]),
     [total, setTotal] = useState(0),
@@ -94,6 +100,8 @@ export function Registry({ user, config, refresh }) {
     [status, setStatus] = useState(""),
     [cat, setCat] = useState(""),
     [channel, setChannel] = useState(""),
+    [dates, setDates] = useState(emptyDateFilters),
+    [dateReset, setDateReset] = useState(0),
     [filters, setFilters] = useState({}),
     [page, setPage] = useState(1),
     [size, setSize] = useState(10),
@@ -163,6 +171,8 @@ export function Registry({ user, config, refresh }) {
     setStatus("");
     setCat("");
     setChannel("");
+    setDates(emptyDateFilters);
+    setDateReset((value) => value + 1);
     setFilters({});
     setPage(1);
   }
@@ -264,7 +274,7 @@ export function Registry({ user, config, refresh }) {
           className="panel filters"
           onSubmit={(e) => {
             e.preventDefault();
-            setFilters({ q, village, status, cat, channel });
+            setFilters({ q, village, status, cat, channel, ...dates });
             setPage(1);
           }}
         >
@@ -272,81 +282,128 @@ export function Registry({ user, config, refresh }) {
             <Search size={18} />
             เงื่อนไขการค้นหา
           </h2>
-          <Field
-            label="ชื่อ นามสกุล / เลขบัตร / เลขทะเบียน"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="ค้นหาข้อมูลบุคคล"
-          />
-          <Select
-            label="หมู่บ้าน"
-            value={village}
-            onChange={(e) => setVillage(e.target.value)}
-          >
-            <option value="">ทุกหมู่บ้านที่มีสิทธิ์</option>
-            {config.villages
-              .filter((v) => can(user, "view", v.id))
-              .map((v) => (
-                <option key={v.id} value={v.id}>
-                  ม.{v.id} บ้าน{v.name}
+          <div className="registry-filter-fields">
+            <Field
+              label="ชื่อ นามสกุล / เลขบัตร / เลขทะเบียน"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="ค้นหาข้อมูลบุคคล"
+            />
+            <Select
+              label="หมู่บ้าน"
+              value={village}
+              onChange={(e) => setVillage(e.target.value)}
+            >
+              <option value="">ทุกหมู่บ้านที่มีสิทธิ์</option>
+              {config.villages
+                .filter((v) => can(user, "view", v.id))
+                .map((v) => (
+                  <option key={v.id} value={v.id}>
+                    ม.{v.id} บ้าน{v.name}
+                  </option>
+                ))}
+            </Select>
+            <Select
+              label="ประเภทความช่วยเหลือ"
+              value={cat}
+              onChange={(e) => setCat(e.target.value)}
+            >
+              <option value="">ทั้งหมด</option>
+              {categories.map((c, i) => (
+                <option key={c} value={String(i)}>
+                  {c}
                 </option>
               ))}
-          </Select>
-          <Select
-            label="ประเภทความช่วยเหลือ"
-            value={cat}
-            onChange={(e) => setCat(e.target.value)}
-          >
-            <option value="">ทั้งหมด</option>
-            {categories.map((c, i) => (
-              <option key={c} value={String(i)}>
-                {c}
-              </option>
-            ))}
-          </Select>
-          <Select
-            label="สถานะการช่วยเหลือ"
-            value={status}
-            onChange={(e) => setStatus(e.target.value)}
-          >
-            <option value="">ทุกสถานะ</option>
-            {Object.entries(personLabels).map(([s, l]) => (
-              <option key={s} value={s}>
-                {l}
-              </option>
-            ))}
-          </Select>
-          <Select
-            label="ยื่นคำร้องผ่านระบบ"
-            value={channel}
-            onChange={(e) => setChannel(e.target.value)}
-          >
-            <option value="">ทั้งหมด</option>
-            {Object.entries(submissionChannelFilters).map(([value, option]) => (
-              <option key={value} value={value}>
-                {option.label}
-              </option>
-            ))}
-          </Select>
-          <div className="filter-actions">
-            <button type="button" onClick={clear}>
-              ล้างตัวกรอง
-            </button>
-            <button className="primary">
-              <Search size={16} />
-              ค้นหา
-            </button>
+            </Select>
+            <Select
+              label="สถานะการช่วยเหลือ"
+              value={status}
+              onChange={(e) => setStatus(e.target.value)}
+            >
+              <option value="">ทุกสถานะ</option>
+              {Object.entries(personLabels).map(([s, l]) => (
+                <option key={s} value={s}>
+                  {l}
+                </option>
+              ))}
+            </Select>
+            <Select
+              label="ยื่นคำร้องผ่านระบบ"
+              value={channel}
+              onChange={(e) => setChannel(e.target.value)}
+            >
+              <option value="">ทั้งหมด</option>
+              {Object.entries(submissionChannelFilters).map(
+                ([value, option]) => (
+                  <option key={value} value={value}>
+                    {option.label}
+                  </option>
+                ),
+              )}
+            </Select>
           </div>
-          <button
-            type="button"
-            className="text-button"
-            onClick={() => {
-              clear();
-              load();
-            }}
-          >
-            รีเซ็ตมุมมองและโหลดข้อมูลใหม่
-          </button>
+          <div className="registry-date-ranges">
+            {[
+              ["วันที่ยื่นคำขอ", "request"],
+              ["วันที่ได้รับการช่วยเหลือ", "received"],
+            ].map(([label, prefix]) => (
+              <fieldset
+                className="registry-date-range"
+                key={`${prefix}-${dateReset}`}
+              >
+                <legend>{label}</legend>
+                <div className="registry-date-fields">
+                  <Field
+                    label="ตั้งแต่วันที่"
+                    type="date"
+                    name={`${prefix}From`}
+                    value={dates[`${prefix}From`]}
+                    max={dates[`${prefix}To`] || undefined}
+                    onChange={({ target: { value } }) =>
+                      setDates((previous) => ({
+                        ...previous,
+                        [`${prefix}From`]: value,
+                      }))
+                    }
+                  />
+                  <Field
+                    label="ถึงวันที่"
+                    type="date"
+                    name={`${prefix}To`}
+                    value={dates[`${prefix}To`]}
+                    min={dates[`${prefix}From`] || undefined}
+                    onChange={({ target: { value } }) =>
+                      setDates((previous) => ({
+                        ...previous,
+                        [`${prefix}To`]: value,
+                      }))
+                    }
+                  />
+                </div>
+              </fieldset>
+            ))}
+          </div>
+          <div className="registry-filter-footer">
+            <button
+              type="button"
+              className="text-button"
+              onClick={() => {
+                clear();
+                load();
+              }}
+            >
+              รีเซ็ตมุมมองและโหลดข้อมูลใหม่
+            </button>
+            <div className="filter-actions">
+              <button type="button" onClick={clear}>
+                ล้างตัวกรอง
+              </button>
+              <button className="primary">
+                <Search size={16} />
+                ค้นหา
+              </button>
+            </div>
+          </div>
         </form>
         <section className="panel results">
           <div className="panel-title">

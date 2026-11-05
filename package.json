@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "test:registry-dates": "node tests/registry-date-filter.mjs",
     "test:children": "node tests/children-integration.mjs",
     "dev": "vite --host 0.0.0.0",
     "build": "vite build",

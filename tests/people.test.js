@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import { personStatus, statuses, submissionChannels } from "../src/domain.js";
+import { matchesRequestFilters } from "../src/request-filters.js";
 import {
   parsePeopleQuery,
   peopleSelection,
@@ -27,6 +28,116 @@ test("query parser bounds pagination and rejects invalid filters", () => {
     "channel=DROP TABLE",
   ])
     assert.throws(() => query(bad), QueryError);
+});
+
+test("date filter parsing validates ISO dates and permits open-ended inclusive ranges", () => {
+  assert.equal(query("requestFrom=2026-10-01").requestFrom, "2026-10-01");
+  assert.equal(query("receivedTo=2026-10-31").receivedTo, "2026-10-31");
+  for (const invalid of [
+    "requestFrom=01/10/2569",
+    "requestTo=2026-02-30",
+    "receivedFrom=invalid",
+    "receivedTo=2026-13-01",
+    "requestFrom=2026-11-01&requestTo=2026-10-01",
+    "receivedFrom=2026-11-01&receivedTo=2026-10-01",
+  ])
+    assert.throws(() => query(invalid), QueryError);
+});
+
+test("date filters match the same request and payment, retain permissions, and run before pagination", () => {
+  const db = new DatabaseSync(":memory:");
+  db.exec(
+    "CREATE TABLE people(id TEXT, village INTEGER, data TEXT, national_id TEXT, deleted_at TEXT)",
+  );
+  const request = (category, date, payments = []) => ({
+    category,
+    date,
+    payments: payments.map((date) => ({ date })),
+    status: "pending",
+  });
+  const fixtures = [
+    ["a", 1, null, [request("0", "2026-10-01", ["2026-10-31"])]],
+    ["b", 1, null, [request("0", "2026-10-31", ["2026-10-01"])]],
+    ["c", 1, null, [request("0", "2026-09-30", ["2026-10-15"])]],
+    ["d", 1, null, [request("0", "2026-10-15", ["2026-11-01"])]],
+    [
+      "e",
+      1,
+      null,
+      [
+        request("0", "2026-09-30", ["2026-10-15"]),
+        request("1", "2026-10-15", ["2026-11-01"]),
+      ],
+    ],
+    ["f", 1, null, [request("0", "2026-10-15", ["2026-09-30", "2026-11-01"])]],
+    ["g", 1, null, [request("0", "2026-10-15")]],
+    ["h", 2, null, [request("0", "2026-10-15", ["2026-10-15"])]],
+    ["i", 1, "deleted", [request("0", "2026-10-15", ["2026-10-15"])]],
+  ];
+  const insert = db.prepare("INSERT INTO people VALUES(?,?,?,?,?)");
+  for (const [id, village, deleted, requests] of fixtures)
+    insert.run(
+      id,
+      village,
+      JSON.stringify({ first: id, last: "test", requests }),
+      null,
+      deleted,
+    );
+  const get = (filter, user = admin, exporting = false) => {
+    const parsed = query(filter);
+    const selection = peopleSelection(user, parsed, exporting);
+    return db
+      .prepare(
+        `SELECT id FROM people WHERE ${selection.where} ORDER BY ${selection.order} LIMIT ? OFFSET ?`,
+      )
+      .all(...selection.args, parsed.size, (parsed.page - 1) * parsed.size)
+      .map((row) => row.id);
+  };
+  const range =
+    "requestFrom=2026-10-01&requestTo=2026-10-31&receivedFrom=2026-10-01&receivedTo=2026-10-31";
+  assert.deepEqual(get(range), ["a", "b", "h"]);
+  assert.deepEqual(get(range + "&size=1&page=2"), ["b"]);
+  assert.deepEqual(get(range + "&cat=0&village=1"), ["a", "b"]);
+  assert.deepEqual(
+    get("cat=0&requestFrom=2026-10-01&requestTo=2026-10-31&village=1"),
+    ["a", "b", "d", "f", "g"],
+  );
+  assert.deepEqual(
+    get("receivedFrom=2026-10-01&receivedTo=2026-10-31&village=1"),
+    ["a", "b", "c", "e"],
+  );
+  assert.deepEqual(get(range + "&trash=1"), ["i"]);
+  const staff = {
+    role: "staff",
+    permissions: ["view", "export"],
+    villages: [1],
+  };
+  assert.deepEqual(get(range, staff, true), ["a", "b"]);
+  assert.deepEqual(get(range, { ...staff, permissions: ["view"] }, true), []);
+  assert.deepEqual(get("requestTo=2026-09-30&village=1"), ["c", "e"]);
+  for (const filter of [
+    "",
+    range,
+    range + "&cat=1",
+    "requestFrom=2026-10-01",
+    "requestTo=2026-10-01",
+    "receivedFrom=2026-10-31",
+    "receivedTo=2026-10-01",
+    "cat=0&requestFrom=2026-10-01",
+  ])
+    assert.deepEqual(
+      get(filter),
+      fixtures
+        .filter(
+          ([, , deleted, requests]) =>
+            !deleted &&
+            requests.some((request) =>
+              matchesRequestFilters(request, query(filter)),
+            ),
+        )
+        .map(([id]) => id),
+    );
+  db.close();
 });
 test("SQLite status classification matches every three-request combination", () => {
   const db = new DatabaseSync(":memory:");

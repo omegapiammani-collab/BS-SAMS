@@ -94,6 +94,45 @@ test("category and assistance lines stay paired when categories repeat or type n
   ]);
 });
 
+test("date-filtered exports include only matching requests and their children", () => {
+  const child = (first) => ({ ...newChild(), first, last: "ทดสอบ" });
+  const parent = {
+    ...person,
+    requests: [
+      {
+        category: "0",
+        type: childAssistanceType,
+        date: "2026-10-01",
+        payments: [{ date: "2026-10-31" }],
+        children: [child("เด็กที่ตรงเงื่อนไข")],
+      },
+      {
+        category: "0",
+        type: "คำขอนอกช่วงวันที่",
+        date: "2026-09-30",
+        payments: [{ date: "2026-10-31" }],
+        children: [child("เด็กนอกช่วงวันที่")],
+      },
+      {
+        category: "1",
+        type: "ช่วยเหลือนอกช่วงวันที่",
+        date: "2026-10-01",
+        payments: [{ date: "2026-11-01" }],
+      },
+    ],
+  };
+  const rows = registryExportRows([parent], {
+    requestFrom: "2026-10-01",
+    requestTo: "2026-10-31",
+    receivedFrom: "2026-10-01",
+    receivedTo: "2026-10-31",
+  });
+  assert.equal(rows.length, 3);
+  assert.equal(rows[1][10], childAssistanceType);
+  assert.equal(rows[2][1], "เด็กที่ตรงเงื่อนไข");
+  assert.ok(!JSON.stringify(rows).includes("นอกช่วงวันที่"));
+});
+
 test("registry exports include child identity and assistance type without removed columns", () => {
   const child = {
     ...newChild(),

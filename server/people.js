@@ -3,6 +3,7 @@ import {
   closed,
   submissionChannels,
   submissionChannelFilters,
+  isDate,
 } from "../src/domain.js";
 
 export class QueryError extends Error {}
@@ -21,6 +22,10 @@ export function parsePeopleQuery(params) {
     status: get("status"),
     cat: get("cat"),
     channel: get("channel"),
+    requestFrom: get("requestFrom"),
+    requestTo: get("requestTo"),
+    receivedFrom: get("receivedFrom"),
+    receivedTo: get("receivedTo"),
     page: integer("page", 1, 1000000),
     size: integer("size", 10, 100),
     sort: get("sort") || "name",
@@ -37,6 +42,15 @@ export function parsePeopleQuery(params) {
     !["asc", "desc"].includes(query.direction)
   )
     throw new QueryError("เงื่อนไขการค้นหาไม่ถูกต้อง");
+  for (const [from, to, label] of [
+    [query.requestFrom, query.requestTo, "วันที่ยื่นคำขอ"],
+    [query.receivedFrom, query.receivedTo, "วันที่ได้รับการช่วยเหลือ"],
+  ]) {
+    if ((from && !isDate(from)) || (to && !isDate(to)))
+      throw new QueryError(`${label}ไม่ถูกต้อง`);
+    if (from && to && from > to)
+      throw new QueryError(`${label}: วันเริ่มต้นต้องไม่หลังวันสิ้นสุด`);
+  }
   return query;
 }
 // Keep the SQL classification equivalent to personStatus; parity is tested using SQLite.
@@ -76,11 +90,42 @@ export function peopleSelection(user, query, exporting = false) {
     where.push(`(${statusSql})=?`);
     args.push(query.status);
   }
+  const requestConditions = [];
   if (query.cat) {
-    where.push(
-      "EXISTS(SELECT 1 FROM json_each(data,'$.requests') r WHERE CAST(json_extract(r.value,'$.category') AS TEXT)=?)",
+    requestConditions.push(
+      "CAST(json_extract(r.value,'$.category') AS TEXT)=?",
     );
     args.push(query.cat);
+  }
+  for (const [key, operator] of [
+    ["requestFrom", ">="],
+    ["requestTo", "<="],
+  ]) {
+    if (query[key]) {
+      requestConditions.push(`json_extract(r.value,'$.date')${operator}?`);
+      args.push(query[key]);
+    }
+  }
+  const paymentConditions = [];
+  for (const [key, operator] of [
+    ["receivedFrom", ">="],
+    ["receivedTo", "<="],
+  ]) {
+    if (query[key]) {
+      paymentConditions.push(
+        `json_extract(payment.value,'$.date')${operator}?`,
+      );
+      args.push(query[key]);
+    }
+  }
+  if (paymentConditions.length)
+    requestConditions.push(
+      `EXISTS(SELECT 1 FROM json_each(r.value,'$.payments') payment WHERE ${paymentConditions.join(" AND ")})`,
+    );
+  if (requestConditions.length) {
+    where.push(
+      `EXISTS(SELECT 1 FROM json_each(data,'$.requests') r WHERE ${requestConditions.join(" AND ")})`,
+    );
   }
   if (query.channel) {
     const group = submissionChannelFilters[query.channel];
