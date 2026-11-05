@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import ExcelJS from "exceljs";
 import { chromium, expect } from "@playwright/test";
 import { hashPassword } from "../server/auth.js";
 import { childAssistanceType } from "../src/children.js";
@@ -143,6 +145,7 @@ try {
     ),
   );
   await page.getByRole("button", { name: "บันทึกข้อมูล", exact: true }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: "แก้ไข ผู้ปกครองจำลอง", exact: true }),
   ).toBeVisible();
@@ -201,6 +204,50 @@ try {
   await page.keyboard.press("Space");
   await expect(childRows).toHaveCount(0);
   await page.setViewportSize({ width: 1440, height: 1000 });
+  for (const [label, extension] of [
+    ["CSV", "csv"],
+    ["EXCEL", "xlsx"],
+    ["PDF", "pdf"],
+  ]) {
+    const pending = page.waitForEvent("download");
+    await page.getByRole("button", { name: label, exact: true }).click();
+    const file = `/tmp/bs-sams-children-export.${extension}`;
+    await (await pending).saveAs(file);
+    if (extension === "pdf") {
+      const text = execFileSync("pdftotext", ["-raw", file, "-"], {
+        encoding: "utf8",
+      })
+        .replace(/[\s\u200b]/g, "")
+        .replace(/ำา/g, "ำ");
+      for (const value of [
+        "ผู้ปกครองจำลอง",
+        "เด็กหนึ่ง",
+        "เด็กสอง",
+        "01/01/2563",
+        childAssistanceType,
+        "บุตรหรือเด็กในความอุปการะ",
+      ])
+        assert.ok(text.includes(value.replace(/\s/g, "")), value);
+    } else {
+      const workbook = new ExcelJS.Workbook();
+      const sheet =
+        extension === "csv"
+          ? await workbook.csv.readFile(file, { map: (value) => value })
+          : (await workbook.xlsx.readFile(file)).worksheets[0];
+      assert.equal(sheet.rowCount, 4);
+      const cell = (row, header) =>
+        sheet.getRow(row).getCell(sheet.getRow(1).values.indexOf(header)).value;
+      assert.equal(cell(2, "ชื่อ"), "ผู้ปกครองจำลอง");
+      assert.equal(cell(3, "ชื่อ"), "เด็กหนึ่ง");
+      assert.equal(cell(4, "ชื่อ"), "เด็กสอง");
+      assert.equal(cell(3, "วันเดือนปีเกิด"), "01/01/2563");
+      assert.ok(!sheet.getRow(1).values.includes("ความพิการ"));
+      assert.ok(!sheet.getRow(1).values.includes("ผู้ยื่นคำขอและคำขอ"));
+      assert.equal(cell(3, "ประเภทข้อมูล"), "บุตรหรือเด็กในความอุปการะ");
+      assert.equal(cell(3, "ประเภทความช่วยเหลือ"), childAssistanceType);
+      if (extension === "xlsx") assert.equal(typeof cell(3, "อายุ"), "number");
+    }
+  }
   await open();
   await expect(first.getByLabel("ชื่อ *", { exact: true })).toHaveValue(
     "เด็กหนึ่ง",
@@ -225,6 +272,7 @@ try {
     "เด็กสอง",
   );
   await page.getByRole("button", { name: "บันทึกข้อมูล", exact: true }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: "แก้ไข ผู้ปกครองจำลอง", exact: true }),
   ).toBeVisible();

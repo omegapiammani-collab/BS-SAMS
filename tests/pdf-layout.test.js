@@ -11,6 +11,8 @@ import {
   registryPdfOptions,
 } from "../src/registry-export.js";
 import { pdfDocument } from "../src/pdf-document.js";
+import { newChild, childAssistanceType } from "../src/children.js";
+import { disabilities } from "../src/domain.js";
 
 test("registry PDF keeps all seven Thai assistance categories inside page margins", async () => {
   const directory = mkdtempSync(join(tmpdir(), "bs-sams-pdf-layout-"));
@@ -24,7 +26,25 @@ test("registry PDF keeps all seven Thai assistance categories inside page margin
         house: "001/2",
         village: 1,
         submissionChannels,
-        requests: categories.map((_, category) => ({ category })),
+        requests: categories.map((_, category) => ({
+          category,
+          type: childAssistanceType,
+          date: "2026-01-01",
+          ...(category === 0
+            ? {
+                children: [
+                  {
+                    ...newChild(),
+                    first: "บุตรทดสอบ",
+                    last: "รายละเอียดเด็ก",
+                    birth: "2020-01-01",
+                    nationalId: "1101700207030",
+                    disabilities,
+                  },
+                ],
+              }
+            : {}),
+        })),
       },
     ]);
     const fonts = { Sarabun: { normal: "regular.ttf", bold: "bold.ttf" } };
@@ -69,7 +89,16 @@ test("registry PDF keeps all seven Thai assistance categories inside page margin
     const text = execFileSync("pdftotext", ["-raw", file, "-"], {
       encoding: "utf8",
     }).replace(/[\s\u200b]/g, "");
-    for (const category of [...categories, ...submissionChannels, "001/2"])
+    for (const category of [
+      ...categories,
+      ...submissionChannels,
+      "001/2",
+      "บุตรทดสอบ",
+      "รายละเอียดเด็ก",
+      "01/01/2563",
+      "1101700207030",
+      childAssistanceType,
+    ])
       assert.ok(text.includes(category.replace(/\s/g, "")), category);
   } finally {
     rmSync(directory, { recursive: true, force: true });

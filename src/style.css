@@ -759,6 +759,13 @@ nav button svg:last-child:not(:first-child) {
   padding: 21px;
   margin: 0;
 }
+.results td > .actions {
+  flex-wrap: nowrap;
+  width: max-content;
+}
+.results td > .actions > button {
+  flex-shrink: 0;
+}
 .table-scroll {
   overflow: auto;
 }

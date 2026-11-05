@@ -47,7 +47,9 @@ export function pdfDocument(
           (total, weight) => total + weight,
           0,
         );
-        const availableWidth = pageWidth - 56 - count * 10;
+        // pdfmake's lightHorizontalLines layout adds 8pt on each side of
+        // internal column boundaries, with no padding at the outer edges.
+        const availableWidth = pageWidth - 56 - (count - 1) * 16;
         return {
           margin: [0, 0, 0, index === groups.length - 1 ? 0 : 12],
           layout: "lightHorizontalLines",

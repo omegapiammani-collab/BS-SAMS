@@ -116,7 +116,7 @@ try {
     if (extension === "pdf") {
       const text = execFileSync("pdftotext", ["-raw", file, "-"], {
         encoding: "utf8",
-      });
+      }).replace(/[\s\u200b]/g, "");
       for (const index of [3, 5])
         assert.ok(text.includes("ทดสอบช่องทาง" + index));
       for (const index of [0, 1, 2, 4])

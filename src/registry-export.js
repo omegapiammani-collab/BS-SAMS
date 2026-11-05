@@ -1,7 +1,7 @@
 import { age, categories } from "./domain.js";
 import { formatThaiDate } from "./thai-date.js";
 export const registryPdfOptions = {
-  columnWeights: [0.6, 1, 1, 1.1, 0.9, 0.4, 0.6, 0.4, 0.9, 2.3, 1.3],
+  columnWeights: [1, 1, 1, 1.5, 1.2, 0.6, 0.8, 0.6, 1, 1.9, 1.5, 1.7],
 };
 
 export function registryExportRows(people, filters = {}) {
@@ -18,8 +18,9 @@ export function registryExportRows(people, filters = {}) {
       "โทรศัพท์",
       "ประเภทความช่วยเหลือ",
       "ยื่นคำร้องผ่านระบบ",
+      "ประเภทข้อมูล",
     ],
-    ...people.map((person) => {
+    ...people.flatMap((person) => {
       const selected = person.requests.filter(
         (request) =>
           filters.cat === undefined ||
@@ -31,7 +32,7 @@ export function registryExportRows(people, filters = {}) {
           selected.map((request) => categories[Number(request.category)]),
         ),
       ];
-      return [
+      const parent = [
         person.title,
         person.first,
         person.last,
@@ -43,7 +44,25 @@ export function registryExportRows(people, filters = {}) {
         person.phone,
         types.join("\n"),
         (person.submissionChannels || []).join("\n"),
+        "ผู้ยื่นคำขอ",
       ];
+      const children = selected.flatMap((request) =>
+        (request.children || []).map((child) => [
+          child.title,
+          child.first,
+          child.last,
+          child.nationalId,
+          formatThaiDate(child.birth),
+          age(child.birth),
+          "",
+          "",
+          "",
+          request.type,
+          "",
+          "บุตรหรือเด็กในความอุปการะ",
+        ]),
+      );
+      return [parent, ...children];
     }),
   ];
 }
