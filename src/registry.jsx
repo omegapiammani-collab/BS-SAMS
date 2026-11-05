@@ -32,6 +32,7 @@ import {
   categories,
   disabilities,
   submissionChannels,
+  submissionChannelFilters,
   statuses,
   requestReasonLabel,
   closed,
@@ -90,6 +91,7 @@ export function Registry({ user, config, refresh }) {
     [village, setVillage] = useState(""),
     [status, setStatus] = useState(""),
     [cat, setCat] = useState(""),
+    [channel, setChannel] = useState(""),
     [filters, setFilters] = useState({}),
     [page, setPage] = useState(1),
     [size, setSize] = useState(10),
@@ -156,6 +158,7 @@ export function Registry({ user, config, refresh }) {
     setVillage("");
     setStatus("");
     setCat("");
+    setChannel("");
     setFilters({});
     setPage(1);
   }
@@ -257,7 +260,7 @@ export function Registry({ user, config, refresh }) {
           className="panel filters"
           onSubmit={(e) => {
             e.preventDefault();
-            setFilters({ q, village, status, cat });
+            setFilters({ q, village, status, cat, channel });
             setPage(1);
           }}
         >
@@ -306,6 +309,18 @@ export function Registry({ user, config, refresh }) {
             {Object.entries(personLabels).map(([s, l]) => (
               <option key={s} value={s}>
                 {l}
+              </option>
+            ))}
+          </Select>
+          <Select
+            label="ยื่นคำร้องผ่านระบบ"
+            value={channel}
+            onChange={(e) => setChannel(e.target.value)}
+          >
+            <option value="">ทั้งหมด</option>
+            {Object.entries(submissionChannelFilters).map(([value, option]) => (
+              <option key={value} value={value}>
+                {option.label}
               </option>
             ))}
           </Select>

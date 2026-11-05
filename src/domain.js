@@ -28,6 +28,11 @@ export const categories = [
   "อื่น ๆ",
 ];
 export const submissionChannels = ["พม. CARE", "สายด่วน พม. 1300"];
+export const submissionChannelFilters = {
+  care: { label: "พม. CARE", care: true, hotline: false },
+  hotline: { label: "สายด่วน พม. 1300", care: false, hotline: true },
+  both: { label: "ทั้งสองช่องทาง", care: true, hotline: true },
+};
 export function validSubmissionChannels(value) {
   return (
     value === undefined ||

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
-import { personStatus, statuses } from "../src/domain.js";
+import { personStatus, statuses, submissionChannels } from "../src/domain.js";
 import {
   parsePeopleQuery,
   peopleSelection,
@@ -22,6 +22,9 @@ test("query parser bounds pagination and rejects invalid filters", () => {
     "direction=DROP TABLE",
     "sort=password",
     "village=NaN",
+    "channel=constructor",
+    "channel=unspecified",
+    "channel=DROP TABLE",
   ])
     assert.throws(() => query(bad), QueryError);
 });
@@ -118,5 +121,59 @@ test("SQL filters before paging and enforces village and export permissions", ()
     [],
   );
   assert.deepEqual(get(admin, query("trash=1")), ["26"]);
+  db.close();
+});
+
+test("submission channel filters are exclusive and retain village, trash and export restrictions", () => {
+  const db = new DatabaseSync(":memory:");
+  db.exec(
+    "CREATE TABLE people(id TEXT, village INTEGER, data TEXT, national_id TEXT, deleted_at TEXT)",
+  );
+  const insert = db.prepare("INSERT INTO people VALUES(?,?,?,?,?)");
+  for (const [id, channels, village, deleted] of [
+    ["care", [submissionChannels[0]], 1, null],
+    ["hotline", [submissionChannels[1]], 1, null],
+    ["both", submissionChannels, 1, null],
+    ["missing", undefined, 1, null],
+    ["empty", [], 1, null],
+    ["other-village", submissionChannels, 2, null],
+    ["trash", submissionChannels, 1, "deleted"],
+  ])
+    insert.run(
+      id,
+      village,
+      JSON.stringify({
+        first: id,
+        last: "test",
+        submissionChannels: channels,
+        requests: [],
+      }),
+      null,
+      deleted,
+    );
+  const get = (filter, user = admin, exporting = false) => {
+    const selection = peopleSelection(user, query(filter), exporting);
+    return db
+      .prepare(`SELECT id FROM people WHERE ${selection.where} ORDER BY id`)
+      .all(...selection.args)
+      .map((row) => row.id);
+  };
+  assert.deepEqual(get("channel=care"), ["care"]);
+  assert.deepEqual(get("channel=hotline"), ["hotline"]);
+  assert.deepEqual(get("channel=both"), ["both", "other-village"]);
+  assert.ok(get("").includes("empty"));
+  assert.ok(get("").includes("missing"));
+  assert.deepEqual(get("channel=both&trash=1"), ["trash"]);
+  assert.deepEqual(get("channel=both&village=1"), ["both"]);
+  const staff = {
+    role: "staff",
+    permissions: ["view", "export"],
+    villages: [1],
+  };
+  assert.deepEqual(get("channel=both", staff, true), ["both"]);
+  assert.deepEqual(
+    get("channel=both", { ...staff, permissions: ["view"] }, true),
+    [],
+  );
   db.close();
 });

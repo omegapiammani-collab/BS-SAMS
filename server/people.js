@@ -1,4 +1,9 @@
-import { personLabels, closed } from "../src/domain.js";
+import {
+  personLabels,
+  closed,
+  submissionChannels,
+  submissionChannelFilters,
+} from "../src/domain.js";
 
 export class QueryError extends Error {}
 export function parsePeopleQuery(params) {
@@ -15,6 +20,7 @@ export function parsePeopleQuery(params) {
     village: integer("village", null, 10000),
     status: get("status"),
     cat: get("cat"),
+    channel: get("channel"),
     page: integer("page", 1, 1000000),
     size: integer("size", 10, 100),
     sort: get("sort") || "name",
@@ -25,6 +31,8 @@ export function parsePeopleQuery(params) {
     query.q.length > 200 ||
     (query.status && !Object.hasOwn(personLabels, query.status)) ||
     (query.cat && !/^[0-6]$/.test(query.cat)) ||
+    (query.channel &&
+      !Object.hasOwn(submissionChannelFilters, query.channel)) ||
     !["name", "village"].includes(query.sort) ||
     !["asc", "desc"].includes(query.direction)
   )
@@ -73,6 +81,15 @@ export function peopleSelection(user, query, exporting = false) {
       "EXISTS(SELECT 1 FROM json_each(data,'$.requests') r WHERE CAST(json_extract(r.value,'$.category') AS TEXT)=?)",
     );
     args.push(query.cat);
+  }
+  if (query.channel) {
+    const group = submissionChannelFilters[query.channel];
+    for (const [index, selected] of [group.care, group.hotline].entries()) {
+      where.push(
+        `${selected ? "" : "NOT "}EXISTS(SELECT 1 FROM json_each(data,'$.submissionChannels') channel WHERE channel.value=?)`,
+      );
+      args.push(submissionChannels[index]);
+    }
   }
   const direction = query.direction === "desc" ? "DESC" : "ASC";
   const name = "json_extract(data,'$.first')||' '||json_extract(data,'$.last')";
