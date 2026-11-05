@@ -2322,3 +2322,25 @@ textarea[aria-invalid="true"] {
 .submission-channels:disabled {
   opacity: 1;
 }
+
+.submission-channel-panel .legend > div {
+  gap: 12px;
+}
+.submission-channel-panel .legend strong {
+  white-space: nowrap;
+}
+.channel-percentage {
+  color: var(--text-secondary);
+  font-size: var(--font-caption);
+  font-weight: 400;
+}
+.submission-channel-panel .panel-note + .panel-note {
+  margin-top: 6px;
+}
+
+@media (max-width: 600px) {
+  .submission-channel-panel .donut-layout {
+    flex-direction: column;
+    gap: 0;
+  }
+}

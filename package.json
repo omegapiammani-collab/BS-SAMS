@@ -19,7 +19,8 @@
     "test:compatibility": "node tests/compatibility.mjs",
     "test:duplicates-drafts": "node tests/recovery-integration.mjs",
     "test:idle-session": "node tests/idle-session-integration.mjs",
-    "test:submission-channels": "node tests/submission-channels-integration.mjs"
+    "test:submission-channels": "node tests/submission-channels-integration.mjs",
+    "test:channel-dashboard": "node tests/submission-channel-dashboard.mjs"
   },
   "dependencies": {
     "@fontsource/sarabun": "^5.2.0",

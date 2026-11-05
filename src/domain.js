@@ -201,6 +201,7 @@ export function summarize(people, from, to) {
     helpedPeople: 0,
     helpedEvents: 0,
     unknownAge: 0,
+    submissionChannels: { care: 0, hotline: 0, both: 0, unspecified: 0 },
     category: categories.map(() => 0),
     ages: [0, 0, 0, 0],
     villages: {},
@@ -210,6 +211,18 @@ export function summarize(people, from, to) {
     const rs = (p.requests || []).filter((r) => within(r.date));
     if (rs.length) {
       result.people++;
+      const [care, hotline] = submissionChannels.map((channel) =>
+        (p.submissionChannels || []).includes(channel),
+      );
+      const channelGroup =
+        care && hotline
+          ? "both"
+          : care
+            ? "care"
+            : hotline
+              ? "hotline"
+              : "unspecified";
+      result.submissionChannels[channelGroup]++;
       result.requests += rs.length;
       const status = personStatus({ requests: rs });
       if (status === "done") result.done++;

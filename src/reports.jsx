@@ -11,7 +11,12 @@ import {
 } from "lucide-react";
 import { api } from "./api";
 import { formatMoney } from "./money";
-import { categories, monthLabel, validateReportRange } from "./domain";
+import {
+  categories,
+  monthLabel,
+  validateReportRange,
+  submissionChannels,
+} from "./domain";
 import { TableScroll, Field, ErrorBox, Empty } from "./ui";
 const n = (x) => Number(x || 0).toLocaleString("th-TH");
 function useSummary(range, refresh) {
@@ -43,6 +48,77 @@ function useSummary(range, refresh) {
     };
   }, [range[0], range[1], refresh]);
   return [data, error];
+}
+function SubmissionChannelsChart({ counts }) {
+  const total = counts.care + counts.hotline + counts.both;
+  const careEnd = total ? (counts.care / total) * 100 : 0;
+  const hotlineEnd = total ? ((counts.care + counts.hotline) / total) * 100 : 0;
+  const groups = [
+    ["var(--blue)", submissionChannels[0], counts.care],
+    ["var(--brand-sky)", submissionChannels[1], counts.hotline],
+    ["var(--chart-success)", "ทั้งสองช่องทาง", counts.both],
+  ];
+  return (
+    <section
+      className="panel submission-channel-panel"
+      aria-labelledby="submission-channel-title"
+    >
+      <div className="panel-title">
+        <h2 id="submission-channel-title">ยื่นคำร้องผ่านระบบ</h2>
+        <span className="small muted">หน่วย: คน</span>
+      </div>
+      <div className="donut-layout">
+        <div
+          className="donut"
+          role="img"
+          aria-label={`ผู้ระบุช่องทางทั้งหมด ${n(total)} คน`}
+          style={{
+            background: total
+              ? `conic-gradient(var(--blue) 0 ${careEnd}%,var(--brand-sky) ${careEnd}% ${hotlineEnd}%,var(--chart-success) ${hotlineEnd}% 100%)`
+              : "var(--chart-pending)",
+          }}
+        >
+          <div>
+            <strong>{n(total)}</strong>
+            <span>ผู้ระบุช่องทาง</span>
+          </div>
+        </div>
+        <div className="legend">
+          {groups.map(([color, label, count]) => (
+            <div key={label}>
+              <span>
+                <i style={{ background: color }} />
+                {label}
+              </span>
+              <strong>
+                {n(count)} คน{" "}
+                <small className="channel-percentage">
+                  (
+                  {total
+                    ? ((count / total) * 100).toLocaleString("th-TH", {
+                        maximumFractionDigits: 1,
+                      })
+                    : "0"}
+                  %)
+                </small>
+              </strong>
+            </div>
+          ))}
+        </div>
+      </div>
+      {!total && (
+        <p className="panel-note">ยังไม่มีข้อมูลช่องทางในช่วงวันที่ที่เลือก</p>
+      )}
+      <p className="panel-note">
+        นับคนไม่ซ้ำตามช่วงวันที่ที่เลือก
+        ผู้เลือกทั้งสองช่องทางนับในกลุ่มสีเขียวเท่านั้น
+      </p>
+      <p className="panel-note">
+        ร้อยละคิดเฉพาะผู้ระบุช่องทาง · ยังไม่ระบุช่องทาง {n(counts.unspecified)}{" "}
+        คน
+      </p>
+    </section>
+  );
 }
 export function Dashboard({ config, range, refresh, onRegistry }) {
   const [d, error] = useSummary(range, refresh);
@@ -169,6 +245,7 @@ export function Dashboard({ config, range, refresh, onRegistry }) {
             ))}
           </div>
         </section>
+        <SubmissionChannelsChart counts={d.submissionChannels} />
         <section className="panel">
           <div className="panel-title">
             <h2>ช่วงวัยของผู้ประสบปัญหา</h2>
