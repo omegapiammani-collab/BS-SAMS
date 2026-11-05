@@ -7,7 +7,7 @@
   --font-body: 16px;
   --font-ui: 15px;
   --font-small: 14px;
-  --font-caption: 13px;
+  --font-caption: 15px;
   --font-heading: 20px;
   --text-primary: #000000;
   --text-secondary: #000000;
@@ -449,6 +449,7 @@ nav button svg:last-child:not(:first-child) {
   font-size: var(--font-caption);
 }
 .bar-row > span {
+  font-size: var(--font-ui);
   color: var(--text-secondary);
 }
 .bar-row strong {
