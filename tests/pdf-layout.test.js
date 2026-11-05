@@ -104,3 +104,53 @@ test("registry PDF keeps all seven Thai assistance categories inside page margin
     rmSync(directory, { recursive: true, force: true });
   }
 });
+
+test("village report PDF wraps a complete Thai word instead of splitting its vowel from its consonant", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "bs-sams-thai-wrap-"));
+  try {
+    const type = "เงินสงเคราะห์ผู้สูงอายุที่อยู่ในภาวะยากลำบาก";
+    const rows = [
+      ["หมู่บ้าน", "หมวดหมู่", "ประเภทความช่วยเหลือ", "จำนวนคน"],
+      ["หมู่ 1 บ้านทรายมูล", "เงินสงเคราะห์", type, 1],
+    ];
+    const fonts = { Sarabun: { normal: "regular.ttf", bold: "bold.ttf" } };
+    const vfs = Object.fromEntries(
+      [
+        ["regular.ttf", "Sarabun-Regular.ttf"],
+        ["bold.ttf", "Sarabun-Bold.ttf"],
+      ].map(([key, name]) => [
+        key,
+        readFileSync(
+          new URL(`../src/assets/fonts/${name}`, import.meta.url),
+        ).toString("base64"),
+      ]),
+    );
+    const buffer = await new Promise((resolve) =>
+      pdfMake
+        .createPdf(
+          pdfDocument(rows, "รายงานรายหมู่บ้าน", { thaiWordWrapColumns: [2] }),
+          undefined,
+          fonts,
+          vfs,
+        )
+        .getBuffer(resolve),
+    );
+    const file = join(directory, "report.pdf");
+    writeFileSync(file, buffer);
+    const lines = execFileSync("pdftotext", ["-raw", file, "-"], {
+      encoding: "utf8",
+    })
+      .split(/\r?\n/)
+      .map((line) => line.replace(/[\s\u200b]/g, "").replace(/ำา/g, "ำ"));
+    assert.ok(
+      lines.includes("ลำบาก"),
+      "ลำบาก must stay together on the new line",
+    );
+    assert.ok(
+      lines.join("").includes(type),
+      "All Thai characters must survive rendering",
+    );
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});

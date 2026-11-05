@@ -418,7 +418,7 @@ export function Reports({ user, config, range, setRange }) {
         to: range[1],
       });
       const output = reportExport(sum, config, range, type, section);
-      await downloadRows(output.rows, format, output.name);
+      await downloadRows(output.rows, format, output.name, output.pdfOptions);
     } catch (e) {
       setError(e.message);
     } finally {

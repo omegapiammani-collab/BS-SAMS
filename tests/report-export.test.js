@@ -79,7 +79,66 @@ test("category exports count each person once per assistance type within the dat
     [categories[2], "", 0],
   ]);
   assert.ok(
-    output.rows.some((row) => row[0] === "ยอดรวมผู้ยื่นคำขอ" && row[1] === 2),
+    output.rows.some((row) => row[0] === "ยอดรวมผู้ยื่นคำขอ" && row[2] === 2),
   );
+  assert.ok(!JSON.stringify(output.rows).includes("นอกช่วง"));
+});
+
+test("village exports group unique people by village, category and assistance type with aligned totals", () => {
+  const request = (category, type, date = range[0]) => ({
+    category,
+    type,
+    date,
+    status: "pending",
+    payments: [],
+  });
+  const summary = summarize(
+    [
+      {
+        village: 1,
+        requests: [
+          request("0", "เด็ก"),
+          request("0", "เด็ก"),
+          request("1", "ซ่อมบ้าน"),
+        ],
+      },
+      { village: 1, requests: [request("0", "เด็ก")] },
+      {
+        village: 2,
+        requests: [request("0", "เด็ก"), request("0", "นอกช่วง", "2026-09-30")],
+      },
+    ],
+    ...range,
+  );
+  const output = reportExport(
+    summary,
+    {
+      villages: [
+        { id: 1, name: "หนึ่ง" },
+        { id: 2, name: "สอง" },
+        { id: 3, name: "สาม" },
+      ],
+    },
+    range,
+    "village",
+    "summary",
+  );
+  assert.deepEqual(output.rows[3], [
+    "หมู่บ้าน",
+    "หมวดหมู่",
+    "ประเภทความช่วยเหลือ",
+    "จำนวนคน",
+  ]);
+  assert.deepEqual(output.rows.slice(4, 8), [
+    ["หมู่ 1 บ้านหนึ่ง", categories[0], "เด็ก", 2],
+    ["หมู่ 1 บ้านหนึ่ง", categories[1], "ซ่อมบ้าน", 1],
+    ["หมู่ 2 บ้านสอง", categories[0], "เด็ก", 1],
+    ["หมู่ 3 บ้านสาม", "", "", 0],
+  ]);
+  assert.deepEqual(output.rows.slice(-3), [
+    ["ยอดรวมผู้ยื่นคำขอ", "", "", 3],
+    ["ผู้ได้รับความช่วยเหลือจริง", "", "", 0],
+    ["จำนวนครั้งช่วยเหลือ", "", "", 0],
+  ]);
   assert.ok(!JSON.stringify(output.rows).includes("นอกช่วง"));
 });

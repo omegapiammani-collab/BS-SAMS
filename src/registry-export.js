@@ -2,6 +2,7 @@ import { age, categories } from "./domain.js";
 import { formatThaiDate } from "./thai-date.js";
 export const registryPdfOptions = {
   wrapChildAssistance: true,
+  thaiWordWrapColumns: [9, 10],
   columnWeights: [1, 1, 1, 1.5, 1.2, 0.6, 0.8, 0.6, 1, 1.3, 2.4, 1.7, 1.5],
 };
 

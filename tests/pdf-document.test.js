@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { pdfDocument } from "../src/pdf-document.js";
+const visibleText = (text) =>
+  Array.isArray(text) ? text.map((run) => run.text).join("") : text;
 test("PDF preserves ragged report rows, Thai text and formula-like text", () => {
   const document = pdfDocument(
     [
@@ -15,8 +17,11 @@ test("PDF preserves ragged report rows, Thai text and formula-like text", () => 
   const table = document.content[0].table;
   assert.equal(document.pageSize, "A4");
   assert.ok(table.body.every((row) => row.length === 3));
-  assert.equal(table.body[2][0].text, "เงินสงเคราะห์");
-  assert.equal(document.content[1].table.body[0][0].text, "=ข้อความ");
+  assert.equal(visibleText(table.body[2][0].text), "เงินสงเคราะห์");
+  assert.equal(
+    visibleText(document.content[1].table.body[0][0].text),
+    "=ข้อความ",
+  );
   assert.equal(document.content[1].table.body[0][1].text, "3000.3");
   assert.equal(
     pdfDocument([Array(10).fill("ทะเบียน")], "ทะเบียน").pageSize,

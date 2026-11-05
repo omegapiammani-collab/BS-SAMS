@@ -30,6 +30,8 @@ export function reportExport(sum, config, range, type, section) {
       ],
     };
   const village = type === "village";
+  const totalRow = (label, count) =>
+    village ? [label, "", "", count] : [label, "", count];
   const categoryRows = categories.flatMap((category, index) => {
     const types = (sum.assistanceTypes || []).filter(
       (item) => item.category === index,
@@ -39,24 +41,35 @@ export function reportExport(sum, config, range, type, section) {
       : [[category, "", sum.category[index] || 0]];
   });
   return {
+    ...(village ? { pdfOptions: { thaiWordWrapColumns: [2] } } : {}),
     name: village
       ? "จำนวนผู้ประสบปัญหารายหมู่บ้าน"
       : "จำนวนผู้ประสบปัญหาตามประเภทความช่วยเหลือ",
     rows: [
       ...metadata,
       village
-        ? ["หมู่บ้าน", "จำนวนคน"]
+        ? ["หมู่บ้าน", "หมวดหมู่", "ประเภทความช่วยเหลือ", "จำนวนคน"]
         : ["หมวดหมู่", "ประเภทความช่วยเหลือ", "จำนวนคน"],
       ...(village
-        ? config.villages.map((v) => [
-            `หมู่ ${v.id} บ้าน${v.name}`,
-            sum.villages[v.id] || 0,
-          ])
+        ? config.villages.flatMap((v) => {
+            const name = `หมู่ ${v.id} บ้าน${v.name}`;
+            const types = (sum.villageAssistanceTypes || []).filter(
+              (item) => item.village === Number(v.id),
+            );
+            return types.length
+              ? types.map((item) => [
+                  name,
+                  categories[item.category],
+                  item.type,
+                  item.people,
+                ])
+              : [[name, "", "", sum.villages[v.id] || 0]];
+          })
         : categoryRows),
       [],
-      ["ยอดรวมผู้ยื่นคำขอ", sum.people],
-      ["ผู้ได้รับความช่วยเหลือจริง", sum.helpedPeople],
-      ["จำนวนครั้งช่วยเหลือ", sum.helpedEvents],
+      totalRow("ยอดรวมผู้ยื่นคำขอ", sum.people),
+      totalRow("ผู้ได้รับความช่วยเหลือจริง", sum.helpedPeople),
+      totalRow("จำนวนครั้งช่วยเหลือ", sum.helpedEvents),
     ],
   };
 }

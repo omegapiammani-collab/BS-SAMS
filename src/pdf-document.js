@@ -1,3 +1,5 @@
+import { pdfText } from "./pdf-text.js";
+
 export function pdfDocument(
   rows,
   title,
@@ -5,6 +7,7 @@ export function pdfDocument(
     orientation = "landscape",
     columnWeights,
     wrapChildAssistance = false,
+    thaiWordWrapColumns = [],
   } = {},
 ) {
   const columns = Math.max(1, ...rows.map((row) => row.length));
@@ -64,12 +67,10 @@ export function pdfDocument(
             ),
             body: group.map((row, index) =>
               Array.from({ length: count }, (_, col) => ({
-                text: wrapChildAssistance
-                  ? String(row[col] ?? "").replaceAll(
-                      "เงินสงเคราะห์เด็กในครอบครัวยากจน",
-                      "เงินสงเคราะห์เด็กในครอบครัว\nยากจน",
-                    )
-                  : String(row[col] ?? ""),
+                text: pdfText(row[col], {
+                  wrapChildAssistance,
+                  thaiWordWrap: index > 0 && thaiWordWrapColumns.includes(col),
+                }),
                 bold: index === 0,
                 fillColor: index === 0 ? "#edf4fc" : null,
                 margin: [2, 4, 2, 4],

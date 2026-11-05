@@ -211,6 +211,7 @@ export function summarize(people, from, to) {
     submissionChannels: { care: 0, hotline: 0, both: 0, unspecified: 0 },
     category: categories.map(() => 0),
     assistanceTypes: [],
+    villageAssistanceTypes: [],
     ages: [0, 0, 0, 0],
     villages: {},
     monthly,
@@ -245,8 +246,16 @@ export function summarize(people, from, to) {
           rs.filter((r) => Number(r.category) === c).map((r) => r.type || ""),
         );
         if (types.size) result.category[c]++;
-        for (const type of types)
-          assistanceTypes[c].set(type, (assistanceTypes[c].get(type) || 0) + 1);
+        for (const type of types) {
+          const counts = assistanceTypes[c].get(type) || {
+            people: 0,
+            villages: new Map(),
+          };
+          counts.people++;
+          const village = Number(p.village);
+          counts.villages.set(village, (counts.villages.get(village) || 0) + 1);
+          assistanceTypes[c].set(type, counts);
+        }
       }
       for (const r of rs) {
         const key = r.date.slice(0, 7);
@@ -271,7 +280,21 @@ export function summarize(people, from, to) {
   result.amount /= 100;
   result.helpedPeople = helpedPeople.size;
   result.assistanceTypes = assistanceTypes.flatMap((types, category) =>
-    Array.from(types, ([type, people]) => ({ category, type, people })),
+    Array.from(types, ([type, counts]) => ({
+      category,
+      type,
+      people: counts.people,
+    })),
+  );
+  result.villageAssistanceTypes = assistanceTypes.flatMap((types, category) =>
+    Array.from(types, ([type, counts]) =>
+      Array.from(counts.villages, ([village, people]) => ({
+        village,
+        category,
+        type,
+        people,
+      })),
+    ).flat(),
   );
   for (const m of monthly) {
     m.amount /= 100;
