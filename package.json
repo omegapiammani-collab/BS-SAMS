@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "test:children": "node tests/children-integration.mjs",
     "dev": "vite --host 0.0.0.0",
     "build": "vite build",
     "start": "wrangler dev --ip 0.0.0.0",

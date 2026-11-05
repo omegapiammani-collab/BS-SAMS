@@ -1,4 +1,5 @@
 import { validSubmissionChannels } from "../src/domain.js";
+import { validChildrenShape } from "../src/children.js";
 import { allowed } from "./auth.js";
 import { personFromRow } from "./people.js";
 export const DRAFT_TTL = 7 * 86400000;
@@ -63,6 +64,7 @@ export function validateDraftData(p) {
       r.id.length <= 100 &&
       /^[0-6]$/.test(r.category) &&
       typeof r.type === "string" &&
+      validChildrenShape(r.children) &&
       [
         "pending",
         "progress",

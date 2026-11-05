@@ -1,4 +1,5 @@
 export const auditActions = {
+  "delete-child": "ลบข้อมูลบุตรหรือเด็กในความอุปการะ",
   "confirm-distinct-person": "ยืนยันเพิ่มบุคคลแยกจากรายการที่อาจซ้ำ",
   "create-person": "เพิ่มทะเบียนบุคคล",
   "update-person": "แก้ไขทะเบียนบุคคล",

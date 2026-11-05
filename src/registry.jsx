@@ -1,4 +1,5 @@
 import { categoryColors } from "./category-colors.js";
+import { RequestChildren } from "./request-children.jsx";
 import { DateDraftContext } from "./date-draft-context.js";
 import { DraftRecovery } from "./draft-recovery.jsx";
 import { useServerDraft } from "./use-server-draft.js";
@@ -10,6 +11,7 @@ import { formatThaiDate } from "./thai-date.js";
 import React, { useEffect, useState, useRef } from "react";
 import {
   Plus,
+  Minus,
   Search,
   Eye,
   Pencil,
@@ -104,6 +106,7 @@ export function Registry({ user, config, refresh }) {
     [purging, setPurging] = useState(null),
     [purgeError, setPurgeError] = useState(""),
     [busy, setBusy] = useState(false);
+  const [expandedChildren, setExpandedChildren] = useState(new Set());
   const requestVersion = useRef(0);
   const params = new URLSearchParams({
     ...filters,
@@ -123,6 +126,7 @@ export function Registry({ user, config, refresh }) {
     setLoading(true);
     setError("");
     setData([]);
+    setExpandedChildren(new Set());
     api("/people?" + queryString, "GET", undefined, {
       signal: controller.signal,
     })
@@ -384,137 +388,236 @@ export function Registry({ user, config, refresh }) {
                 </tr>
               </thead>
               <tbody>
-                {visible.map((p) => (
-                  <tr key={p.id}>
-                    <td>
-                      <span className={"badge " + personStatus(p)}>
-                        {personLabels[personStatus(p)]}
-                      </span>
-                      {trash && (
-                        <small className="block muted">
-                          ลบโดย {p.deletedBy}
-                          <br />
-                          {p.deleteReason}
-                        </small>
-                      )}
-                    </td>
-                    <td>
-                      <strong>
-                        {p.title}
-                        {p.first} {p.last}
-                      </strong>
-                      <small className="block muted">
-                        อายุ {age(p.birth) ?? "ไม่ระบุ"} ปี
-                      </small>
-                    </td>
-                    <td>
-                      ม.{p.village}
-                      <small className="block muted">
-                        บ้าน
-                        {config.villages.find((v) => v.id === p.village)?.name}
-                      </small>
-                    </td>
-                    <td>
-                      <div className="category-icons">
-                        {categories.map((c, i) => {
-                          const Icon = icons[i];
-                          const rs = p.requests.filter(
-                            (r) => Number(r.category) === i,
-                          );
-                          const s = personStatus({ requests: rs });
-                          return (
-                            <span
-                              key={c}
-                              tabIndex={0}
-                              className={"category-icon " + s}
-                              title={`${c}: ${personLabels[s]}`}
-                              aria-label={`${c}: ${personLabels[s]}`}
-                            >
-                              <Icon size={16} />
-                              <span className="tooltip">
-                                {c} · {personLabels[s]}
-                              </span>
-                            </span>
-                          );
-                        })}
-                      </div>
-                    </td>
-                    <td>
-                      <div className="actions">
-                        {trash ? (
-                          <>
-                            <button
-                              title="กู้คืน"
-                              onClick={async () => {
-                                try {
-                                  await api(
-                                    `/people/${p.id}/restore`,
-                                    "POST",
-                                    {},
-                                  );
-                                  load();
-                                  refresh();
-                                } catch (e) {
-                                  setError(e.message);
+                {visible.map((p) => {
+                  const childRequests = p.requests.filter(
+                    (request) => request.children?.length,
+                  );
+                  const expanded = expandedChildren.has(p.id);
+                  const childCount = childRequests.reduce(
+                    (count, request) => count + request.children.length,
+                    0,
+                  );
+                  return (
+                    <React.Fragment key={p.id}>
+                      <tr>
+                        <td>
+                          <span className={"badge " + personStatus(p)}>
+                            {personLabels[personStatus(p)]}
+                          </span>
+                          {trash && (
+                            <small className="block muted">
+                              ลบโดย {p.deletedBy}
+                              <br />
+                              {p.deleteReason}
+                            </small>
+                          )}
+                        </td>
+                        <td>
+                          <div className="registry-person-name">
+                            {childCount > 0 && (
+                              <button
+                                type="button"
+                                className="icon children-toggle"
+                                aria-label={`${expanded ? "หุบ" : "แสดง"}ข้อมูลบุตรหรือเด็กในความอุปการะของ ${p.first} ${p.last}`}
+                                aria-expanded={expanded}
+                                aria-controls={
+                                  expanded
+                                    ? `registry-children-${p.id}`
+                                    : undefined
                                 }
-                              }}
+                                onClick={() =>
+                                  setExpandedChildren((previous) => {
+                                    const next = new Set(previous);
+                                    if (next.has(p.id)) next.delete(p.id);
+                                    else next.add(p.id);
+                                    return next;
+                                  })
+                                }
+                              >
+                                {expanded ? (
+                                  <Minus size={18} />
+                                ) : (
+                                  <Plus size={18} />
+                                )}
+                              </button>
+                            )}
+                            <div>
+                              <strong>
+                                {p.title}
+                                {p.first} {p.last}
+                              </strong>
+                              <small className="block muted">
+                                อายุ {age(p.birth) ?? "ไม่ระบุ"} ปี
+                              </small>
+                              {childCount > 0 && (
+                                <small className="block muted">
+                                  บุตรหรือเด็กในความอุปการะ {childCount} รายการ
+                                </small>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                        <td>
+                          ม.{p.village}
+                          <small className="block muted">
+                            บ้าน
+                            {
+                              config.villages.find((v) => v.id === p.village)
+                                ?.name
+                            }
+                          </small>
+                        </td>
+                        <td>
+                          <div className="category-icons">
+                            {categories.map((c, i) => {
+                              const Icon = icons[i];
+                              const rs = p.requests.filter(
+                                (r) => Number(r.category) === i,
+                              );
+                              const s = personStatus({ requests: rs });
+                              return (
+                                <span
+                                  key={c}
+                                  tabIndex={0}
+                                  className={"category-icon " + s}
+                                  title={`${c}: ${personLabels[s]}`}
+                                  aria-label={`${c}: ${personLabels[s]}`}
+                                >
+                                  <Icon size={16} />
+                                  <span className="tooltip">
+                                    {c} · {personLabels[s]}
+                                  </span>
+                                </span>
+                              );
+                            })}
+                          </div>
+                        </td>
+                        <td>
+                          <div className="actions">
+                            {trash ? (
+                              <>
+                                <button
+                                  title="กู้คืน"
+                                  onClick={async () => {
+                                    try {
+                                      await api(
+                                        `/people/${p.id}/restore`,
+                                        "POST",
+                                        {},
+                                      );
+                                      load();
+                                      refresh();
+                                    } catch (e) {
+                                      setError(e.message);
+                                    }
+                                  }}
+                                >
+                                  <RotateCcw size={17} />
+                                  กู้คืน
+                                </button>
+                                {user.role === "admin" && (
+                                  <button
+                                    className="danger-button"
+                                    aria-label={`ลบถาวร ${p.first} ${p.last}`}
+                                    onClick={() => {
+                                      setPurgeError("");
+                                      setPurging(p);
+                                    }}
+                                  >
+                                    <Trash2 size={17} />
+                                    ลบถาวร
+                                  </button>
+                                )}
+                              </>
+                            ) : (
+                              <>
+                                <button
+                                  className="icon"
+                                  aria-label={`ดู ${p.first}`}
+                                  onClick={() => {
+                                    setReadonly(true);
+                                    setEditor(p);
+                                  }}
+                                >
+                                  <Eye size={17} />
+                                </button>
+                                {can(user, "edit", p.village) && (
+                                  <button
+                                    className="icon"
+                                    aria-label={`แก้ไข ${p.first}`}
+                                    onClick={() => {
+                                      setReadonly(false);
+                                      setEditor(p);
+                                    }}
+                                  >
+                                    <Pencil size={17} />
+                                  </button>
+                                )}
+                                {can(user, "delete", p.village) && (
+                                  <button
+                                    className="icon danger"
+                                    aria-label={`ลบ ${p.first}`}
+                                    onClick={() => setDeleting(p)}
+                                  >
+                                    <Trash2 size={17} />
+                                  </button>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                      {expanded && childRequests.length > 0 && (
+                        <tr
+                          className="registry-children-row"
+                          id={`registry-children-${p.id}`}
+                        >
+                          <td colSpan={5}>
+                            <div
+                              className="registry-children"
+                              role="region"
+                              aria-label={`บุตรหรือเด็กในความอุปการะของ ${p.first} ${p.last}`}
                             >
-                              <RotateCcw size={17} />
-                              กู้คืน
-                            </button>
-                            {user.role === "admin" && (
-                              <button
-                                className="danger-button"
-                                aria-label={`ลบถาวร ${p.first} ${p.last}`}
-                                onClick={() => {
-                                  setPurgeError("");
-                                  setPurging(p);
-                                }}
-                              >
-                                <Trash2 size={17} />
-                                ลบถาวร
-                              </button>
-                            )}
-                          </>
-                        ) : (
-                          <>
-                            <button
-                              className="icon"
-                              aria-label={`ดู ${p.first}`}
-                              onClick={() => {
-                                setReadonly(true);
-                                setEditor(p);
-                              }}
-                            >
-                              <Eye size={17} />
-                            </button>
-                            {can(user, "edit", p.village) && (
-                              <button
-                                className="icon"
-                                aria-label={`แก้ไข ${p.first}`}
-                                onClick={() => {
-                                  setReadonly(false);
-                                  setEditor(p);
-                                }}
-                              >
-                                <Pencil size={17} />
-                              </button>
-                            )}
-                            {can(user, "delete", p.village) && (
-                              <button
-                                className="icon danger"
-                                aria-label={`ลบ ${p.first}`}
-                                onClick={() => setDeleting(p)}
-                              >
-                                <Trash2 size={17} />
-                              </button>
-                            )}
-                          </>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                              {childRequests.map((request) => (
+                                <table
+                                  className="registry-children-table"
+                                  key={request.id}
+                                >
+                                  <caption>
+                                    บุตรหรือเด็กในความอุปการะ · {request.type} ·
+                                    ยื่นคำขอ {formatThaiDate(request.date)}
+                                  </caption>
+                                  <thead>
+                                    <tr>
+                                      <th scope="col">คำนำหน้า</th>
+                                      <th scope="col">ชื่อ</th>
+                                      <th scope="col">นามสกุล</th>
+                                      <th scope="col">อายุ</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {request.children.map((child) => (
+                                      <tr key={child.id}>
+                                        <td>{child.title}</td>
+                                        <td>{child.first}</td>
+                                        <td>{child.last}</td>
+                                        <td>
+                                          {age(child.birth) === null
+                                            ? "ไม่ระบุ"
+                                            : `${age(child.birth)} ปี`}
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              ))}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
               </tbody>
             </table>
           </TableScroll>
@@ -770,6 +873,9 @@ function PersonEditor({
   const savedPayments = new Set(
     person.requests.flatMap((r) => r.payments.map((x) => x.id)),
   );
+  const savedChildren = new Set(
+    person.requests.flatMap((r) => (r.children || []).map((child) => child.id)),
+  );
   async function requestClose() {
     if (busy) return;
     if (readonly) {
@@ -807,6 +913,14 @@ function PersonEditor({
         p.requests.filter((r) => r.id !== confirm.id),
       );
     }
+    if (confirm.kind === "child")
+      changeRequest(
+        confirm.request,
+        "children",
+        p.requests
+          .find((r) => r.id === confirm.request)
+          .children.filter((child) => child.id !== confirm.id),
+      );
     if (confirm.kind === "payment")
       update(
         "requests",
@@ -1427,6 +1541,24 @@ function PersonEditor({
                           ))}
                       </Select>
                     </div>
+                    <RequestChildren
+                      request={r}
+                      readonly={readonly}
+                      canDelete={canDeleteSaved}
+                      savedIds={savedChildren}
+                      fieldProps={fieldProps}
+                      onChange={(children) =>
+                        changeRequest(r.id, "children", children)
+                      }
+                      onRemove={(id) =>
+                        setConfirm({
+                          kind: "child",
+                          request: r.id,
+                          id,
+                          saved: savedChildren.has(id),
+                        })
+                      }
+                    />
                     <Field label="บันทึกสภาพปัญหาและรายละเอียดคำขอ">
                       <textarea
                         value={r.note}
@@ -1670,15 +1802,19 @@ function PersonEditor({
           title={
             confirm.kind === "close"
               ? "ยังมีข้อมูลที่ไม่ได้บันทึก"
-              : "ลบรายการที่ยังไม่บันทึก"
+              : confirm.kind === "child"
+                ? "ลบข้อมูลเด็ก"
+                : "ลบรายการที่ยังไม่บันทึก"
           }
           description={
             confirm.kind === "close"
               ? "ข้อมูลที่แก้ไขในแบบฟอร์มนี้จะไม่ถูกบันทึก ต้องการละทิ้งการเปลี่ยนแปลงหรือไม่?"
               : confirm.saved
-                ? confirm.kind === "request"
-                  ? "คำขอและประวัติการช่วยเหลือของคำขอนี้จะถูกลบเมื่อกดบันทึกข้อมูล ต้องการลบหรือไม่?"
-                  : "ประวัติการช่วยเหลือนี้จะถูกลบเมื่อกดบันทึกข้อมูล หากไม่เหลือประวัติ สถานะช่วยเหลือแล้วจะกลับเป็นยังไม่ได้ดำเนินการ ต้องการลบหรือไม่?"
+                ? confirm.kind === "child"
+                  ? "ข้อมูลเด็กคนนี้จะถูกลบเมื่อกดบันทึกข้อมูล ต้องการลบหรือไม่?"
+                  : confirm.kind === "request"
+                    ? "คำขอและประวัติการช่วยเหลือของคำขอนี้จะถูกลบเมื่อกดบันทึกข้อมูล ต้องการลบหรือไม่?"
+                    : "ประวัติการช่วยเหลือนี้จะถูกลบเมื่อกดบันทึกข้อมูล หากไม่เหลือประวัติ สถานะช่วยเหลือแล้วจะกลับเป็นยังไม่ได้ดำเนินการ ต้องการลบหรือไม่?"
                 : "รายการนี้ยังไม่ถูกบันทึกในระบบ ต้องการลบออกจากแบบฟอร์มหรือไม่?"
           }
           confirmText={

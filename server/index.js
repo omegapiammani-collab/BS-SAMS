@@ -1,3 +1,4 @@
+import { removedChildren } from "../src/children.js";
 import {
   DraftError,
   listDrafts,
@@ -440,11 +441,17 @@ export default {
           if (historyError) return fail(historyError);
           p.requests = completeAssistedRequests(p, old);
           const removed = removedPersonRecords(p, old);
+          const deletedChildren = removedChildren(p, old);
           if (
-            (removed.requests.length || removed.payments.length) &&
+            (removed.requests.length ||
+              removed.payments.length ||
+              deletedChildren.length) &&
             !allowed(u, "delete", stored.village)
           )
-            return fail("ไม่มีสิทธิ์ลบคำขอหรือประวัติการช่วยเหลือ", 403);
+            return fail(
+              "ไม่มีสิทธิ์ลบคำขอ ประวัติการช่วยเหลือ หรือข้อมูลเด็ก",
+              403,
+            );
           const result = await db.batch([
             db
               .prepare(
@@ -458,6 +465,9 @@ export default {
                 p.version,
               ),
             audit(db, u, "update-person", id, true),
+            ...deletedChildren.map((target) =>
+              audit(db, u, "delete-child", target, true),
+            ),
             ...removed.requests.map((target) =>
               audit(db, u, "delete-request", target, true),
             ),

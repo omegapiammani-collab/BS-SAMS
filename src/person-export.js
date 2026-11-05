@@ -52,6 +52,24 @@ export function personExport(person, config) {
       ["สภาพปัญหาและรายละเอียดคำขอ", request.note || ""],
       [requestReasonLabel(request.status), request.reason || ""],
     );
+    for (const [childIndex, child] of (request.children || []).entries())
+      rows.push(
+        [],
+        [
+          "บุตรหรือเด็กในความอุปการะ",
+          `คนที่ ${childIndex + 1} ของคำขอที่ ${index + 1}`,
+        ],
+        ["ชื่อ–นามสกุล", `${child.title}${child.first} ${child.last}`],
+        ["เลขบัตรประชาชน", child.nationalId],
+        ["วันเกิด", formatThaiDate(child.birth) || ""],
+        ["อายุ", child.birth ? `${age(child.birth)} ปี` : ""],
+        [
+          "ความพิการ",
+          child.disabilities.length
+            ? child.disabilities.join(", ")
+            : "ไม่มีความพิการ",
+        ],
+      );
     if (!request.payments.length)
       rows.push(["ประวัติการช่วยเหลือ", "ยังไม่มีการช่วยเหลือ"]);
     for (const [number, payment] of request.payments.entries())

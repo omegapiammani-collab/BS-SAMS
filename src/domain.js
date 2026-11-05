@@ -1,4 +1,5 @@
 import { toSatang, validMoney, thailandDate } from "./money.js";
+import { validChildrenShape, childTitles } from "./children.js";
 export const villageNames = [
   "ทรายมูล",
   "จำค่า",
@@ -323,6 +324,43 @@ export function validatePersonIssue(
   )
     return { message: "รายการคำขอไม่ถูกต้อง", field: null };
   for (const r of p.requests) {
+    if (!validChildrenShape(r.children))
+      return {
+        message: "ข้อมูลบุตรหรือเด็กในความอุปการะไม่ถูกต้อง",
+        field: `requests.${r.id}.children`,
+      };
+    for (const child of r.children || []) {
+      const prefix = `requests.${r.id}.children.${child.id}`;
+      for (const key of ["first", "last"])
+        if (!child[key].trim())
+          return {
+            message: "กรุณาระบุชื่อและนามสกุลของเด็ก",
+            field: `${prefix}.${key}`,
+          };
+      if (!childTitles.includes(child.title))
+        return {
+          message: "คำนำหน้าของเด็กไม่ถูกต้อง",
+          field: `${prefix}.title`,
+        };
+      if (child.nationalId && !validNationalId(child.nationalId))
+        return {
+          message: "เลขบัตรประชาชนของเด็กไม่ถูกต้อง",
+          field: `${prefix}.nationalId`,
+        };
+      if (child.birth && (!isDate(child.birth) || child.birth > today))
+        return {
+          message: "วันเกิดของเด็กไม่ถูกต้อง",
+          field: `${prefix}.birth`,
+        };
+      if (
+        child.disabilities.some((value) => !disabilities.includes(value)) ||
+        new Set(child.disabilities).size !== child.disabilities.length
+      )
+        return {
+          message: "ประเภทความพิการของเด็กไม่ถูกต้อง",
+          field: `${prefix}.disabilities`,
+        };
+    }
     if (
       !/^[0-6]$/.test(String(r.category)) ||
       !Object.hasOwn(statuses, r.status) ||
