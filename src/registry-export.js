@@ -1,10 +1,10 @@
 import { age, categories } from "./domain.js";
 import { formatThaiDate } from "./thai-date.js";
 export const registryPdfOptions = {
-  columnWeights: [0.6, 1, 1, 1.1, 0.9, 0.4, 0.4, 0.9, 2.3],
+  columnWeights: [0.6, 1, 1, 1.1, 0.9, 0.4, 0.6, 0.4, 0.9, 2.3, 1.3],
 };
 
-export function registryPdfRows(people, filters = {}) {
+export function registryExportRows(people, filters = {}) {
   return [
     [
       "คำนำหน้า",
@@ -13,9 +13,11 @@ export function registryPdfRows(people, filters = {}) {
       "เลขบัตรประชาชน",
       "วันเดือนปีเกิด",
       "อายุ",
+      "บ้านเลขที่",
       "หมู่ที่",
       "โทรศัพท์",
       "ประเภทความช่วยเหลือ",
+      "ยื่นคำร้องผ่านระบบ",
     ],
     ...people.map((person) => {
       const selected = person.requests.filter(
@@ -36,9 +38,11 @@ export function registryPdfRows(people, filters = {}) {
         person.nationalId,
         formatThaiDate(person.birth),
         age(person.birth),
+        person.house || "ไม่ระบุ",
         person.village,
         person.phone,
         types.join("\n") || "ไม่ระบุ",
+        (person.submissionChannels || []).join("\n") || "ไม่ระบุ",
       ];
     }),
   ];

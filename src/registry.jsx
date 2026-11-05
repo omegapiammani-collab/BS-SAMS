@@ -4,7 +4,7 @@ import { DraftRecovery } from "./draft-recovery.jsx";
 import { useServerDraft } from "./use-server-draft.js";
 import { focusAndReveal } from "./form-focus.js";
 import { personExport } from "./person-export.js";
-import { registryPdfRows, registryPdfOptions } from "./registry-export.js";
+import { registryExportRows, registryPdfOptions } from "./registry-export.js";
 import { orderRequests } from "./request-order.js";
 import { formatThaiDate } from "./thai-date.js";
 import React, { useEffect, useState, useRef } from "react";
@@ -31,6 +31,7 @@ import {
   age,
   categories,
   disabilities,
+  submissionChannels,
   statuses,
   requestReasonLabel,
   closed,
@@ -68,6 +69,7 @@ const initial = () => ({
   birth: "",
   marital: "โสด",
   disabilities: [],
+  submissionChannels: [],
   phone: "",
   houseCode: "",
   house: "",
@@ -164,34 +166,7 @@ export function Registry({ user, config, refresh }) {
         filters: { ...filters, sort, direction: ascending ? "asc" : "desc" },
       });
       await downloadRows(
-        f === "pdf"
-          ? registryPdfRows(list, filters)
-          : [
-              [
-                "เลขทะเบียน",
-                "คำนำหน้า",
-                "ชื่อ",
-                "นามสกุล",
-                "เลขบัตรประชาชน",
-                "วันเกิด",
-                "อายุ",
-                "หมู่ที่",
-                "โทรศัพท์",
-                "สถานะ",
-              ],
-              ...list.map((p) => [
-                p.id,
-                p.title,
-                p.first,
-                p.last,
-                p.nationalId,
-                p.birth,
-                age(p.birth),
-                p.village,
-                p.phone,
-                personLabels[personStatus(p)],
-              ]),
-            ],
+        registryExportRows(list, filters),
         f,
         "ทะเบียนผู้ประสบปัญหา",
         f === "pdf" ? registryPdfOptions : undefined,
@@ -1104,6 +1079,30 @@ function PersonEditor({
                   ))}
                 </div>
               </Field>
+              <fieldset className="submission-channels">
+                <legend>ยื่นคำร้องผ่านระบบ</legend>
+                <div className="checkbox-grid">
+                  {submissionChannels.map((channel) => (
+                    <label key={channel}>
+                      <input
+                        type="checkbox"
+                        checked={(p.submissionChannels || []).includes(channel)}
+                        onChange={(e) =>
+                          update(
+                            "submissionChannels",
+                            e.target.checked
+                              ? [...(p.submissionChannels || []), channel]
+                              : (p.submissionChannels || []).filter(
+                                  (value) => value !== channel,
+                                ),
+                          )
+                        }
+                      />
+                      {channel}
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
               <h3 className="section-title">ที่อยู่ปัจจุบัน</h3>
               <div className="form-grid">
                 {input("รหัสประจำบ้าน", "houseCode")}

@@ -5,20 +5,25 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
 import pdfMake from "pdfmake/build/pdfmake.js";
-import { categories } from "../src/domain.js";
-import { registryPdfRows, registryPdfOptions } from "../src/registry-export.js";
+import { categories, submissionChannels } from "../src/domain.js";
+import {
+  registryExportRows,
+  registryPdfOptions,
+} from "../src/registry-export.js";
 import { pdfDocument } from "../src/pdf-document.js";
 
 test("registry PDF keeps all seven Thai assistance categories inside page margins", async () => {
   const directory = mkdtempSync(join(tmpdir(), "bs-sams-pdf-layout-"));
   try {
-    const rows = registryPdfRows([
+    const rows = registryExportRows([
       {
         title: "นาย",
         first: "ทดสอบ",
         last: "ข้อมูลยาว",
         birth: "1990-01-01",
+        house: "001/2",
         village: 1,
+        submissionChannels,
         requests: categories.map((_, category) => ({ category })),
       },
     ]);
@@ -64,7 +69,7 @@ test("registry PDF keeps all seven Thai assistance categories inside page margin
     const text = execFileSync("pdftotext", ["-raw", file, "-"], {
       encoding: "utf8",
     }).replace(/[\s\u200b]/g, "");
-    for (const category of categories)
+    for (const category of [...categories, ...submissionChannels, "001/2"])
       assert.ok(text.includes(category.replace(/\s/g, "")), category);
   } finally {
     rmSync(directory, { recursive: true, force: true });

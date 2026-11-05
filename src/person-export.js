@@ -27,6 +27,10 @@ export function personExport(person, config) {
         ? person.disabilities.join(", ")
         : "ไม่มีความพิการ",
     ],
+    [
+      "ยื่นคำร้องผ่านระบบ",
+      (person.submissionChannels || []).join("\n") || "ไม่ระบุ",
+    ],
     ["โทรศัพท์", person.phone || "ไม่ระบุ"],
     ["รหัสประจำบ้าน", person.houseCode || "ไม่ระบุ"],
     ["บ้านเลขที่", person.house || "ไม่ระบุ"],

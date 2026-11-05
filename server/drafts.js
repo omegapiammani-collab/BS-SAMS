@@ -1,3 +1,4 @@
+import { validSubmissionChannels } from "../src/domain.js";
 import { allowed } from "./auth.js";
 import { personFromRow } from "./people.js";
 export const DRAFT_TTL = 7 * 86400000;
@@ -16,6 +17,7 @@ export function validateDraftData(p) {
     !Number.isInteger(p.village)
   )
     return false;
+  if (!validSubmissionChannels(p.submissionChannels)) return false;
   for (const key of [
     "first",
     "last",

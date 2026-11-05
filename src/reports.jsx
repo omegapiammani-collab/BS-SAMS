@@ -300,7 +300,20 @@ export async function downloadRows(rows, format, name, pdfOptions) {
     const sheet = workbook.addWorksheet("รายงาน");
     sheet.addRows(content);
     sheet.getRow(1).font = { bold: true };
-    sheet.columns.forEach((c) => (c.width = 30));
+    sheet.columns.forEach((column) => {
+      column.width = 30;
+      column.alignment = { wrapText: true, vertical: "top" };
+    });
+    sheet.eachRow((row) => {
+      const lines = Math.max(
+        1,
+        ...Array.from(
+          row.values,
+          (value) => String(value ?? "").split("\n").length,
+        ),
+      );
+      row.height = Math.max(row.height || 15, lines * 18);
+    });
     blob = new Blob([await workbook.xlsx.writeBuffer()], {
       type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     });

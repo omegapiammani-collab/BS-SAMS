@@ -2312,3 +2312,10 @@ textarea[aria-invalid="true"] {
 .draft-status button {
   margin-left: 12px;
 }
+
+.submission-channels > legend {
+  color: #50617a;
+  font-size: var(--font-small);
+  font-weight: 500;
+  margin-bottom: 7px;
+}

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { registryPdfRows } from "../src/registry-export.js";
+import { registryExportRows } from "../src/registry-export.js";
 
 const person = {
   id: "internal-registry-id",
@@ -9,6 +9,7 @@ const person = {
   last: "ส่งออก",
   nationalId: "",
   birth: "1990-01-01",
+  house: "001/2",
   village: 1,
   phone: "",
   requests: [
@@ -18,25 +19,37 @@ const person = {
   ],
 };
 
-test("registry PDF hides registry IDs and status and uses Buddhist birth dates", () => {
-  const rows = registryPdfRows([person]);
+test("registry exports hide registry IDs and status and uses Buddhist birth dates", () => {
+  const rows = registryExportRows([person]);
   assert.ok(!JSON.stringify(rows).includes(person.id));
   assert.ok(!rows[0].includes("เลขทะเบียน"));
   assert.ok(!rows[0].includes("สถานะ"));
   assert.equal(rows[1][4], "01/01/2533");
-  assert.equal(rows[1][8], "เงินสงเคราะห์\nเงินซ่อมบ้าน");
+  assert.equal(rows[1][9], "เงินสงเคราะห์\nเงินซ่อมบ้าน");
+  assert.equal(rows[1][rows[0].indexOf("บ้านเลขที่")], "001/2");
   assert.ok(rows.every((row) => row.length === rows[0].length));
 });
 
-test("registry PDF shows only the selected assistance category including category zero", () => {
-  assert.equal(registryPdfRows([person], { cat: "0" })[1][8], "เงินสงเคราะห์");
-  assert.equal(registryPdfRows([person], { cat: "1" })[1][8], "เงินซ่อมบ้าน");
+test("registry exports show only the selected assistance category including category zero", () => {
   assert.equal(
-    registryPdfRows([person], { cat: "" })[1][8],
+    registryExportRows([person], { cat: "0" })[1][9],
+    "เงินสงเคราะห์",
+  );
+  assert.equal(
+    registryExportRows([person], { cat: "1" })[1][9],
+    "เงินซ่อมบ้าน",
+  );
+  assert.equal(
+    registryExportRows([person], { cat: "" })[1][9],
     "เงินสงเคราะห์\nเงินซ่อมบ้าน",
   );
   assert.equal(
-    registryPdfRows([{ ...person, birth: "", requests: [] }])[1][4],
+    registryExportRows([{ ...person, birth: "", requests: [] }])[1][4],
     "",
   );
+});
+
+test("missing house numbers remain readable in legacy records", () => {
+  const rows = registryExportRows([{ ...person, house: undefined }]);
+  assert.equal(rows[1][rows[0].indexOf("บ้านเลขที่")], "ไม่ระบุ");
 });

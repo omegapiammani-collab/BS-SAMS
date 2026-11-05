@@ -264,12 +264,13 @@ try {
             const book = new ExcelJS.Workbook();
             await book.xlsx.readFile(path);
             assert.equal(book.worksheets[0].rowCount, count + 1);
-          } else if (format === "CSV")
-            assert.equal(
-              readFileSync(path, "utf8").trim().split("\n").length,
-              count + 1,
-            );
-          else {
+          } else if (format === "CSV") {
+            const book = new ExcelJS.Workbook();
+            const sheet = await book.csv.readFile(path, {
+              map: (value) => value,
+            });
+            assert.equal(sheet.rowCount, count + 1);
+          } else {
             assert.equal(readFileSync(path).subarray(0, 5).toString(), "%PDF-");
             const info = execFileSync("pdfinfo", [path], { encoding: "utf8" });
             entry.pages = Number(info.match(/^Pages:\s+(\d+)/m)[1]);

@@ -27,6 +27,15 @@ export const categories = [
   "เครื่องช่วยความพิการ",
   "อื่น ๆ",
 ];
+export const submissionChannels = ["พม. CARE", "สายด่วน พม. 1300"];
+export function validSubmissionChannels(value) {
+  return (
+    value === undefined ||
+    (Array.isArray(value) &&
+      value.every((channel) => submissionChannels.includes(channel)) &&
+      new Set(value).size === value.length)
+  );
+}
 export const disabilities = [
   "ความพิการทางการเห็น",
   "ความพิการทางการได้ยินหรือสื่อความหมาย",
@@ -284,6 +293,8 @@ export function validatePersonIssue(
     p.disabilities.some((d) => !disabilities.includes(d))
   )
     return { message: "ประเภทความพิการไม่ถูกต้อง", field: null };
+  if (!validSubmissionChannels(p.submissionChannels))
+    return { message: "ช่องทางยื่นคำร้องไม่ถูกต้อง", field: null };
   if (p.phone && !/^0\d{8,9}$/.test(p.phone))
     return { message: "หมายเลขโทรศัพท์ไม่ถูกต้อง", field: "phone" };
   if (
