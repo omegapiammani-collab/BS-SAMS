@@ -434,6 +434,10 @@ nav button svg:last-child:not(:first-child) {
 .panel-title h3 {
   margin: 0;
 }
+.dashboard-grid .panel-title > span {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
 .panel-title h2 small {
   font-size: var(--font-caption);
   color: var(--text-secondary);
@@ -456,6 +460,14 @@ nav button svg:last-child:not(:first-child) {
   font-size: var(--font-caption);
   color: var(--text-primary);
   text-align: right;
+}
+@media (min-width: 1024px) {
+  .bars .bar-row {
+    grid-template-columns: 250px minmax(0, 1fr) 25px;
+  }
+  .bars .bar-row > span {
+    white-space: nowrap;
+  }
 }
 .track {
   height: 9px;
@@ -547,6 +559,14 @@ nav button svg:last-child:not(:first-child) {
 }
 .village-bars .track {
   height: 12px;
+}
+@media (min-width: 601px) {
+  .dashboard-grid .village-bars > div {
+    grid-template-columns: 200px minmax(0, 1fr) 26px;
+  }
+  .village-bars > div > span {
+    white-space: nowrap;
+  }
 }
 .age-grid {
   display: grid;
