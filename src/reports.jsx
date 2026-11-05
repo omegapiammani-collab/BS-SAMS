@@ -106,17 +106,6 @@ function SubmissionChannelsChart({ counts }) {
           ))}
         </div>
       </div>
-      {!total && (
-        <p className="panel-note">ยังไม่มีข้อมูลช่องทางในช่วงวันที่ที่เลือก</p>
-      )}
-      <p className="panel-note">
-        นับคนไม่ซ้ำตามช่วงวันที่ที่เลือก
-        ผู้เลือกทั้งสองช่องทางนับในกลุ่มสีเขียวเท่านั้น
-      </p>
-      <p className="panel-note">
-        ร้อยละคิดเฉพาะผู้ระบุช่องทาง · ยังไม่ระบุช่องทาง {n(counts.unspecified)}{" "}
-        คน
-      </p>
     </section>
   );
 }
@@ -274,7 +263,7 @@ export function Dashboard({ config, range, refresh, onRegistry }) {
             คน
           </p>
         </section>
-        <section className="panel">
+        <section className="panel monthly-panel">
           <div className="panel-title">
             <h2>ผู้ยื่นคำขอและผู้ได้รับความช่วยเหลือรายเดือน</h2>
           </div>

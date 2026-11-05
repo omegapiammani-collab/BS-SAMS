@@ -78,7 +78,7 @@ try {
         .filter({ hasText: label })
         .locator("strong"),
     ).toHaveText(value);
-  await expect(panel).toContainText("ยังไม่ระบุช่องทาง 1 คน");
+  await expect(panel.locator(".panel-note")).toHaveCount(0);
   const gradient = await panel
     .locator(".donut")
     .evaluate((el) => getComputedStyle(el).backgroundImage);
@@ -95,6 +95,18 @@ try {
       exact: true,
     }),
   ).toBeVisible();
+  const monthlyPanel = page.locator(".monthly-panel");
+  const monthlyBounds = await monthlyPanel.boundingBox();
+  const gridBounds = await page.locator(".dashboard-grid").boundingBox();
+  assert.ok(Math.abs(monthlyBounds.width - gridBounds.width) < 1);
+  assert.ok(
+    await monthlyPanel
+      .locator(".monthly")
+      .evaluate((el) => el.scrollWidth <= el.clientWidth + 1),
+  );
+  await monthlyPanel.screenshot({
+    path: "/tmp/bs-sams-monthly-full-width.png",
+  });
   await page.screenshot({
     path: "/tmp/bs-sams-channel-dashboard-desktop.png",
     fullPage: true,
@@ -113,9 +125,7 @@ try {
       .locator("strong"),
   ).toHaveText("1 คน (100%)");
   await year.selectOption("2571");
-  await expect(panel).toContainText(
-    "ยังไม่มีข้อมูลช่องทางในช่วงวันที่ที่เลือก",
-  );
+  await expect(panel.locator(".panel-note")).toHaveCount(0);
   await expect(panel.getByRole("img")).toHaveAttribute(
     "aria-label",
     "ผู้ระบุช่องทางทั้งหมด 0 คน",
@@ -133,6 +143,10 @@ try {
   await panel.screenshot({ path: "/tmp/bs-sams-channel-donut-mobile.png" });
   const bounds = await panel.boundingBox();
   assert.ok(bounds.x >= 0 && bounds.x + bounds.width <= 376);
+  const monthlyMobile = await monthlyPanel.boundingBox();
+  assert.ok(
+    monthlyMobile.x >= 0 && monthlyMobile.x + monthlyMobile.width <= 376,
+  );
   assert.deepEqual(errors, []);
   console.log(
     "PASS: real summary API, exclusive 3-way counts, repeated requests counted once, purple/blue/green, year filter, empty state, desktop/mobile, preserved status chart, no runtime errors",

@@ -578,6 +578,10 @@ nav button svg:last-child:not(:first-child) {
   font-size: var(--font-caption);
   color: var(--text-secondary);
 }
+.monthly-panel {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
 .monthly {
   display: flex;
   justify-content: space-around;
@@ -2333,9 +2337,6 @@ textarea[aria-invalid="true"] {
   color: var(--text-secondary);
   font-size: var(--font-caption);
   font-weight: 400;
-}
-.submission-channel-panel .panel-note + .panel-note {
-  margin-top: 6px;
 }
 
 @media (max-width: 600px) {
