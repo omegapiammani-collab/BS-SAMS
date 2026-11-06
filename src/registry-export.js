@@ -4,7 +4,7 @@ import { matchesRequestFilters } from "./request-filters.js";
 export const registryPdfOptions = {
   dontBreakRows: true,
   wrapChildAssistance: true,
-  thaiWordWrapColumns: [9, 10],
+  thaiWordWrapColumns: [9, 10, 11],
   pairedColumns: [9, 10],
   columnWeights: [1, 1, 1, 1.5, 1.2, 0.6, 0.8, 0.6, 1, 1.3, 2.4, 1.7, 1.5],
 };

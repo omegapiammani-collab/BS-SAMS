@@ -86,9 +86,14 @@ test("registry PDF keeps all seven Thai assistance categories inside page margin
         `Text outside right margin: ${word[0]}`,
       );
     }
-    const text = execFileSync("pdftotext", ["-raw", file, "-"], {
+    const rawText = execFileSync("pdftotext", ["-raw", file, "-"], {
       encoding: "utf8",
-    }).replace(/[\s\u200b]/g, "");
+    });
+    assert.ok(
+      rawText.includes("อุปการะ"),
+      "Record type must not split อุปการะ across lines",
+    );
+    const text = rawText.replace(/[\s\u200b]/g, "");
     for (const category of [
       ...categories,
       ...submissionChannels,
