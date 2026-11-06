@@ -2478,7 +2478,7 @@ textarea[aria-invalid="true"] {
 }
 .children-toggle {
   flex: 0 0 auto;
-  color: var(--text-primary);
+  color: #9f1f5c;
   min-width: 44px;
   min-height: 44px;
 }
