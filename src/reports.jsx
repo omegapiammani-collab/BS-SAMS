@@ -116,6 +116,7 @@ function VillageChart({
   onCategoryChange,
   actions,
   disabled = false,
+  title = "ผู้ประสบปัญหารายหมู่บ้าน",
 }) {
   const villages =
     category === ""
@@ -128,7 +129,7 @@ function VillageChart({
       aria-label="กราฟผู้ประสบปัญหารายหมู่บ้าน"
     >
       <div className="panel-title">
-        <h2>ผู้ประสบปัญหารายหมู่บ้าน</h2>
+        <h2>{title}</h2>
         <span className="small muted">
           {config.villages.length} หมู่บ้าน · หน่วย: คน
         </span>
@@ -424,10 +425,13 @@ export async function downloadRows(rows, format, name, pdfOptions) {
       type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     });
   }
+  downloadBlob(blob, `${name}.${format}`);
+}
+function downloadBlob(blob, filename) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `${name}.${format}`;
+  a.download = filename;
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
@@ -468,7 +472,18 @@ export function Reports({ user, config, range, setRange }) {
         section === "village-chart"
           ? villageChartExport(sum, exportConfig, range, villageCategory)
           : reportExport(sum, config, range, type, section);
-      await downloadRows(output.rows, format, output.name, output.pdfOptions);
+      if (format === "jpg") {
+        const { villageChartJpg } = await import("./village-chart-image.js");
+        const blob = await villageChartJpg(
+          sum,
+          exportConfig,
+          range,
+          villageCategory,
+        );
+        downloadBlob(blob, `${output.name}.jpg`);
+      } else {
+        await downloadRows(output.rows, format, output.name, output.pdfOptions);
+      }
     } catch (e) {
       setError(e.message);
     } finally {
@@ -487,7 +502,10 @@ export function Reports({ user, config, range, setRange }) {
             : "ส่งออกตารางสรุป"
       }
     >
-      {["csv", "xlsx", "pdf"].map((format) => (
+      {(section === "village-chart"
+        ? ["csv", "xlsx", "pdf", "jpg"]
+        : ["csv", "xlsx", "pdf"]
+      ).map((format) => (
         <button
           key={format}
           disabled={
@@ -576,16 +594,6 @@ export function Reports({ user, config, range, setRange }) {
           ))}
         </section>
       )}
-      {d && (
-        <VillageChart
-          config={config}
-          summary={d}
-          category={villageCategory}
-          onCategoryChange={setVillageCategory}
-          actions={exportButtons("village-chart")}
-          disabled={busy}
-        />
-      )}
       <section className="panel">
         <div className="panel-title">
           <h2>
@@ -613,6 +621,17 @@ export function Reports({ user, config, range, setRange }) {
           </table>
         </TableScroll>
       </section>
+      {d && (
+        <VillageChart
+          title="จำนวนผู้ประสบปัญหารายหมู่บ้าน"
+          config={config}
+          summary={d}
+          category={villageCategory}
+          onCategoryChange={setVillageCategory}
+          actions={exportButtons("village-chart")}
+          disabled={busy}
+        />
+      )}
       {d && (
         <section className="panel">
           <div className="panel-title">

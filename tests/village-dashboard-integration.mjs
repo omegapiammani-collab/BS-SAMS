@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import ExcelJS from "exceljs";
 import { execFileSync } from "node:child_process";
 import assert from "node:assert/strict";
@@ -93,6 +94,21 @@ try {
     name: "กราฟผู้ประสบปัญหารายหมู่บ้าน",
     exact: true,
   });
+  await expect(
+    reportChart.getByRole("heading", {
+      name: "จำนวนผู้ประสบปัญหารายหมู่บ้าน",
+      exact: true,
+    }),
+  ).toBeVisible();
+  const headings = await page.getByRole("heading").allTextContents();
+  assert.ok(
+    headings.indexOf("จำนวนผู้ประสบปัญหาตามประเภทความช่วยเหลือ") <
+      headings.indexOf("จำนวนผู้ประสบปัญหารายหมู่บ้าน"),
+  );
+  assert.ok(
+    headings.indexOf("จำนวนผู้ประสบปัญหารายหมู่บ้าน") <
+      headings.indexOf("รายละเอียดรายเดือน"),
+  );
   const reportSelect = reportChart.getByLabel("ประเภทความช่วยเหลือ", {
     exact: true,
   });
@@ -115,14 +131,51 @@ try {
   await expect(reportChart.locator(".village-bars strong").nth(0)).toHaveText(
     "1",
   );
-  for (const format of ["CSV", "EXCEL", "PDF"]) {
+  for (const format of ["CSV", "EXCEL", "PDF", "JPG"]) {
     const pending = page.waitForEvent("download");
     await reportChart
       .getByRole("button", { name: format, exact: true })
       .click();
     const file = `/tmp/bs-sams-village-chart.${format === "EXCEL" ? "xlsx" : format.toLowerCase()}`;
     await (await pending).saveAs(file);
-    if (format === "PDF") {
+    if (format === "JPG") {
+      const bytes = readFileSync(file);
+      assert.equal(bytes.subarray(0, 3).toString("hex"), "ffd8ff");
+      const pixels = await page.evaluate(async (base64) => {
+        const img = new Image();
+        img.src = "data:image/jpeg;base64," + base64;
+        await img.decode();
+        const canvas = document.createElement("canvas");
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0);
+        const colored = [];
+        for (let row = 0; row < 17; row++) {
+          const data = ctx.getImageData(
+            0,
+            (190 + row * 44 + 12) * 2,
+            img.width,
+            1,
+          ).data;
+          let purple = 0;
+          for (let i = 0; i < data.length; i += 4)
+            if (
+              data[i] >= 25 &&
+              data[i] < 65 &&
+              data[i + 1] < 65 &&
+              data[i + 2] > 65 &&
+              data[i + 2] < 125
+            )
+              purple++;
+          if (purple > 100) colored.push(row + 1);
+        }
+        return { width: img.width, height: img.height, colored };
+      }, bytes.toString("base64"));
+      assert.equal(pixels.width, 2400);
+      assert.equal(pixels.height, 2004);
+      assert.deepEqual(pixels.colored, [1, 6]);
+    } else if (format === "PDF") {
       const text = execFileSync("pdftotext", ["-raw", file, "-"], {
         encoding: "utf8",
       }).replace(/\s/g, "");
@@ -153,6 +206,7 @@ try {
   await expect(reportSelect).toBeEnabled();
   for (const [name, width, height] of [
     ["desktop", 1440, 1100],
+    ["tablet", 1180, 820],
     ["mobile", 390, 844],
   ]) {
     await page.setViewportSize({ width, height });
@@ -199,10 +253,20 @@ try {
       villageNames.push(row.getCell(1).value);
   });
   assert.deepEqual(villageNames, ["หมู่ 1 บ้านทรายมูล"]);
+  const staffJpgPending = staffPage.waitForEvent("download");
+  await staffChart.getByRole("button", { name: "JPG", exact: true }).click();
+  await (await staffJpgPending).saveAs("/tmp/bs-sams-village-chart-staff.jpg");
+  const staffImage = await staffPage.evaluate(async (base64) => {
+    const img = new Image();
+    img.src = "data:image/jpeg;base64," + base64;
+    await img.decode();
+    return { width: img.width, height: img.height };
+  }, readFileSync("/tmp/bs-sams-village-chart-staff.jpg").toString("base64"));
+  assert.deepEqual(staffImage, { width: 2400, height: 596 });
   await staffContext.close();
   assert.deepEqual(errors, []);
   console.log(
-    "PASS: real summary, dropdown, deduplication, date ranges, dashboard and report charts, real CSV/Excel/PDF downloads, staff village export scope, desktop/tablet/mobile and console",
+    "PASS: real summary, dropdown, deduplication, date ranges, dashboard and report charts, real CSV/Excel/PDF/JPG downloads and bar image pixels, staff village export scope, desktop/tablet/mobile and console",
   );
 } finally {
   await browser?.close();

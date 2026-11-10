@@ -8,8 +8,11 @@ export function villageChartExport(sum, config, range, category = "") {
     counts[village.id] || 0,
   ]);
   return {
-    name: "กราฟผู้ประสบปัญหารายหมู่บ้าน",
-    pdfOptions: { title: "ผู้ประสบปัญหารายหมู่บ้าน", thaiWordWrapColumns: [0] },
+    name: "จำนวนผู้ประสบปัญหารายหมู่บ้าน",
+    pdfOptions: {
+      title: "จำนวนผู้ประสบปัญหารายหมู่บ้าน",
+      thaiWordWrapColumns: [0],
+    },
     rows: [
       ["ช่วงวันที่", ...range.map(formatThaiDate)],
       [

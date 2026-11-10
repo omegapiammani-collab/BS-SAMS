@@ -574,6 +574,13 @@ nav button svg:last-child:not(:first-child) {
   margin-bottom: 17px;
   align-self: flex-end;
 }
+@media (max-width: 600px) {
+  .village-chart-controls > .actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+  }
+}
 .village-bars > div {
   display: grid;
   grid-template-columns: 145px 1fr 26px;
