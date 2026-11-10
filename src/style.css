@@ -555,6 +555,9 @@ nav button svg:last-child:not(:first-child) {
 .village-panel {
   grid-row: span 2;
 }
+.village-filter {
+  max-width: 320px;
+}
 .village-bars > div {
   display: grid;
   grid-template-columns: 145px 1fr 26px;

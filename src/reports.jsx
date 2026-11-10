@@ -111,9 +111,14 @@ function SubmissionChannelsChart({ counts }) {
 }
 export function Dashboard({ config, range, refresh, onRegistry }) {
   const [d, error] = useSummary(range, refresh);
+  const [villageCategory, setVillageCategory] = useState("");
   if (error) return <ErrorBox error={error} />;
   if (!d) return <p>กำลังโหลดภาพรวม…</p>;
-  const max = Math.max(...Object.values(d.villages), 1);
+  const villages =
+    villageCategory === ""
+      ? d.villages
+      : d.villagesByCategory[Number(villageCategory)];
+  const max = Math.max(...Object.values(villages), 1);
   return (
     <>
       <div className="metrics">
@@ -216,7 +221,22 @@ export function Dashboard({ config, range, refresh, onRegistry }) {
               {config.villages.length} หมู่บ้าน · หน่วย: คน
             </span>
           </div>
-          <div className="village-bars">
+          <div className="village-filter">
+            <Field label="ประเภทความช่วยเหลือ">
+              <select
+                value={villageCategory}
+                onChange={(event) => setVillageCategory(event.target.value)}
+              >
+                <option value="">ทั้งหมด</option>
+                {categories.map((category, index) => (
+                  <option key={category} value={String(index)}>
+                    {category}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          </div>
+          <div className="village-bars" aria-live="polite">
             {config.villages.map((v) => (
               <div key={v.id}>
                 <span>
@@ -225,11 +245,11 @@ export function Dashboard({ config, range, refresh, onRegistry }) {
                 <div className="track">
                   <i
                     style={{
-                      width: `${((d.villages[v.id] || 0) / max) * 100}%`,
+                      width: `${((villages[v.id] || 0) / max) * 100}%`,
                     }}
                   />
                 </div>
-                <strong>{n(d.villages[v.id])}</strong>
+                <strong>{n(villages[v.id])}</strong>
               </div>
             ))}
           </div>

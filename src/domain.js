@@ -214,6 +214,7 @@ export function summarize(people, from, to) {
     villageAssistanceTypes: [],
     ages: [0, 0, 0, 0],
     villages: {},
+    villagesByCategory: categories.map(() => ({})),
     monthly,
   };
   for (const p of people) {
@@ -245,7 +246,11 @@ export function summarize(people, from, to) {
         const types = new Set(
           rs.filter((r) => Number(r.category) === c).map((r) => r.type || ""),
         );
-        if (types.size) result.category[c]++;
+        if (types.size) {
+          result.category[c]++;
+          const villages = result.villagesByCategory[c];
+          villages[p.village] = (villages[p.village] || 0) + 1;
+        }
         for (const type of types) {
           const counts = assistanceTypes[c].get(type) || {
             people: 0,
