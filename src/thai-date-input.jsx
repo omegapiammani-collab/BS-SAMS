@@ -129,7 +129,10 @@ export function ThaiDateInput({
           inputMode="numeric"
           placeholder="วว/ดด/ปปปป พ.ศ."
           value={draft}
-          aria-describedby={[props["aria-describedby"], `${id}-date-help`]
+          aria-describedby={[
+            props["aria-describedby"],
+            error && `${id}-date-help`,
+          ]
             .filter(Boolean)
             .join(" ")}
           aria-invalid={!!error || props["aria-invalid"]}
@@ -285,12 +288,11 @@ export function ThaiDateInput({
           </button>
         </div>
       </div>
-      <small
-        id={`${id}-date-help`}
-        className={error ? "date-error" : "date-help"}
-      >
-        {error || "วัน/เดือน/ปี พ.ศ."}
-      </small>
+      {error && (
+        <small id={`${id}-date-help`} className="date-error">
+          {error}
+        </small>
+      )}
       {name && <input type="hidden" name={name} value={value} />}
     </>
   );

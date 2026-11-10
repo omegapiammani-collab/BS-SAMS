@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { reportExport } from "../src/report-export.js";
+import { reportExport, villageChartExport } from "../src/report-export.js";
 import { summarize, categories } from "../src/domain.js";
 const sum = {
   category: [2],
@@ -194,4 +194,37 @@ test("village exports include recorded types from every category and omit empty 
   );
   assert.ok(!empty.rows.some((row) => row[0] === "หมู่ 1 บ้านทดสอบ"));
   assert.deepEqual(empty.rows.at(-3), ["ยอดรวมผู้ยื่นคำขอ", "", "", 0]);
+});
+
+test("village chart exports match category zero, include zero counts and respect supplied village scope", () => {
+  const summary = {
+    ...sum,
+    villages: { 1: 2, 3: 1 },
+    villagesByCategory: [{ 1: 1, 3: 1 }, {}],
+  };
+  const scoped = {
+    villages: [
+      { id: 1, name: "ทดสอบ" },
+      { id: 2, name: "ไม่มีข้อมูล" },
+    ],
+  };
+  const output = villageChartExport(summary, scoped, range, "0");
+  assert.deepEqual(output.rows[0], ["ช่วงวันที่", "01/10/2569", "31/10/2569"]);
+  assert.deepEqual(output.rows[1], ["ประเภทความช่วยเหลือ", categories[0]]);
+  assert.deepEqual(
+    output.rows.filter((row) => String(row[0]).startsWith("หมู่ ")),
+    [
+      ["หมู่ 1 บ้านทดสอบ", 1],
+      ["หมู่ 2 บ้านไม่มีข้อมูล", 0],
+    ],
+  );
+  assert.deepEqual(output.rows.at(-1), ["รวมจำนวนคน", 1]);
+  assert.deepEqual(villageChartExport(summary, scoped, range).rows.at(-1), [
+    "รวมจำนวนคน",
+    2,
+  ]);
+  assert.deepEqual(
+    villageChartExport(summary, scoped, range, "1").rows.at(-1),
+    ["รวมจำนวนคน", 0],
+  );
 });

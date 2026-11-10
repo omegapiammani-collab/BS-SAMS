@@ -1,3 +1,5 @@
+import ExcelJS from "exceljs";
+import { execFileSync } from "node:child_process";
 import assert from "node:assert/strict";
 import { chromium, expect } from "@playwright/test";
 import { hashPassword } from "../server/auth.js";
@@ -53,9 +55,7 @@ try {
   page.on("pageerror", (e) => errors.push(e.message));
   await page.goto(worker.origin);
   const panel = page.locator(".village-panel");
-  const select = panel.getByLabel("ประเภทความช่วยเหลือ", { exact: true });
-  await expect(select).toHaveValue("");
-  await expect(select.locator("option")).toHaveCount(8);
+  await expect(panel.locator("select")).toHaveCount(0);
   const count = (village) =>
     panel
       .locator(".village-bars > div")
@@ -63,28 +63,6 @@ try {
       .locator("strong");
   await expect(count(1)).toHaveText("1");
   await expect(count(3)).toHaveText("1");
-  await select.selectOption("0");
-  await expect(count(1)).toHaveText("1");
-  await expect(count(3)).toHaveText("0");
-  await expect(count(6)).toHaveText("1");
-  await select.selectOption("1");
-  await expect(count(1)).toHaveText("1");
-  await expect(count(3)).toHaveText("1");
-  await expect(count(6)).toHaveText("0");
-  await select.selectOption("2");
-  await expect(panel.locator(".village-bars strong")).toHaveText(
-    Array(17).fill("0"),
-  );
-  assert.ok(
-    !(await panel.locator(".track i").first().getAttribute("style")).includes(
-      "NaN",
-    ),
-  );
-  await select.selectOption("");
-  await expect(count(3)).toHaveText("1");
-  const metricsBefore = await page.locator(".metrics").innerText();
-  await select.selectOption("0");
-  assert.equal(await page.locator(".metrics").innerText(), metricsBefore);
   for (const [name, width, height] of [
     ["desktop", 1440, 1100],
     ["tablet", 1180, 820],
@@ -103,13 +81,128 @@ try {
     });
   }
   await page.getByLabel("ปีงบประมาณ", { exact: false }).selectOption("2569");
-  await expect(count(1)).toHaveText("0");
-  await expect(select).toHaveValue("0");
-  await select.selectOption("2");
   await expect(count(1)).toHaveText("1");
+  await expect(count(3)).toHaveText("0");
+  await page.getByLabel("ปีงบประมาณ", { exact: false }).selectOption("2570");
+  await page.getByRole("button", { name: "เปิดเมนู", exact: true }).click();
+  await page
+    .getByRole("navigation")
+    .getByRole("button", { name: "รายงานและส่งออก", exact: true })
+    .click();
+  const reportChart = page.getByRole("region", {
+    name: "กราฟผู้ประสบปัญหารายหมู่บ้าน",
+    exact: true,
+  });
+  const reportSelect = reportChart.getByLabel("ประเภทความช่วยเหลือ", {
+    exact: true,
+  });
+  await expect(reportSelect).toHaveValue("");
+  await expect(reportSelect.locator("option")).toHaveCount(8);
+  await reportSelect.selectOption("1");
+  await expect(reportChart.locator(".village-bars strong").nth(2)).toHaveText(
+    "1",
+  );
+  await reportSelect.selectOption("2");
+  await expect(reportChart.locator(".village-bars strong")).toHaveText(
+    Array(17).fill("0"),
+  );
+  assert.ok(
+    !(
+      await reportChart.locator(".track i").first().getAttribute("style")
+    ).includes("NaN"),
+  );
+  await reportSelect.selectOption("0");
+  await expect(reportChart.locator(".village-bars strong").nth(0)).toHaveText(
+    "1",
+  );
+  for (const format of ["CSV", "EXCEL", "PDF"]) {
+    const pending = page.waitForEvent("download");
+    await reportChart
+      .getByRole("button", { name: format, exact: true })
+      .click();
+    const file = `/tmp/bs-sams-village-chart.${format === "EXCEL" ? "xlsx" : format.toLowerCase()}`;
+    await (await pending).saveAs(file);
+    if (format === "PDF") {
+      const text = execFileSync("pdftotext", ["-raw", file, "-"], {
+        encoding: "utf8",
+      }).replace(/\s/g, "");
+      assert.ok(text.includes("เงินสงเคราะห์"));
+      assert.ok(text.includes("01/10/2569"));
+      assert.ok(text.includes("30/09/2570"));
+    } else {
+      const book = new ExcelJS.Workbook();
+      const sheet =
+        format === "CSV"
+          ? await book.csv.readFile(file)
+          : (await book.xlsx.readFile(file)).worksheets[0];
+      const data = [];
+      sheet.eachRow((row) => {
+        if (String(row.getCell(1).value).startsWith("หมู่ "))
+          data.push([row.getCell(1).value, Number(row.getCell(2).value)]);
+      });
+      assert.equal(data.length, 17);
+      assert.equal(data[0][1], 1);
+      assert.equal(data[2][1], 0);
+      assert.equal(data[5][1], 1);
+      assert.equal(
+        data.reduce((sum, row) => sum + row[1], 0),
+        2,
+      );
+    }
+  }
+  await expect(reportSelect).toBeEnabled();
+  for (const [name, width, height] of [
+    ["desktop", 1440, 1100],
+    ["mobile", 390, 844],
+  ]) {
+    await page.setViewportSize({ width, height });
+    await reportChart.scrollIntoViewIfNeeded();
+    assert.ok(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    );
+    await reportChart.screenshot({
+      path: `/tmp/bs-sams-report-village-chart-${name}.png`,
+    });
+  }
+  fixture.sql(
+    `INSERT INTO users VALUES('village-staff','village-staff','เจ้าหน้าที่กราฟ','${await hashPassword(password)}','staff','["view","export"]','[1]',0,1);`,
+  );
+  const staffContext = await browser.newContext({
+    viewport: { width: 1440, height: 1100 },
+  });
+  await staffContext.request.post(worker.origin + "/api/login", {
+    data: { username: "village-staff", password },
+  });
+  const staffPage = await staffContext.newPage();
+  await staffPage.goto(worker.origin);
+  await staffPage
+    .getByRole("navigation")
+    .getByRole("button", { name: "รายงานและส่งออก", exact: true })
+    .click();
+  const staffChart = staffPage.getByRole("region", {
+    name: "กราฟผู้ประสบปัญหารายหมู่บ้าน",
+    exact: true,
+  });
+  await staffChart
+    .getByLabel("ประเภทความช่วยเหลือ", { exact: true })
+    .selectOption("0");
+  const staffPending = staffPage.waitForEvent("download");
+  await staffChart.getByRole("button", { name: "EXCEL", exact: true }).click();
+  await (await staffPending).saveAs("/tmp/bs-sams-village-chart-staff.xlsx");
+  const staffBook = new ExcelJS.Workbook();
+  await staffBook.xlsx.readFile("/tmp/bs-sams-village-chart-staff.xlsx");
+  const villageNames = [];
+  staffBook.worksheets[0].eachRow((row) => {
+    if (String(row.getCell(1).value).startsWith("หมู่ "))
+      villageNames.push(row.getCell(1).value);
+  });
+  assert.deepEqual(villageNames, ["หมู่ 1 บ้านทรายมูล"]);
+  await staffContext.close();
   assert.deepEqual(errors, []);
   console.log(
-    "PASS: real summary, dropdown, category zero, deduplication, empty category, year changes, isolated chart, desktop/tablet/mobile and console",
+    "PASS: real summary, dropdown, deduplication, date ranges, dashboard and report charts, real CSV/Excel/PDF downloads, staff village export scope, desktop/tablet/mobile and console",
   );
 } finally {
   await browser?.close();

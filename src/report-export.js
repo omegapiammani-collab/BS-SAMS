@@ -1,5 +1,30 @@
 import { categories, monthLabel } from "./domain.js";
 import { formatThaiDate } from "./thai-date.js";
+export function villageChartExport(sum, config, range, category = "") {
+  const counts =
+    category === "" ? sum.villages : sum.villagesByCategory[Number(category)];
+  const villages = config.villages.map((village) => [
+    `หมู่ ${village.id} บ้าน${village.name}`,
+    counts[village.id] || 0,
+  ]);
+  return {
+    name: "กราฟผู้ประสบปัญหารายหมู่บ้าน",
+    pdfOptions: { title: "ผู้ประสบปัญหารายหมู่บ้าน", thaiWordWrapColumns: [0] },
+    rows: [
+      ["ช่วงวันที่", ...range.map(formatThaiDate)],
+      [
+        "ประเภทความช่วยเหลือ",
+        category === "" ? "ทั้งหมด" : categories[Number(category)],
+      ],
+      ["ขอบเขตข้อมูล", "เฉพาะหมู่บ้านที่มีสิทธิ์ดูและส่งออก"],
+      [],
+      ["หมู่บ้าน", "จำนวนคน"],
+      ...villages,
+      [],
+      ["รวมจำนวนคน", villages.reduce((total, row) => total + row[1], 0)],
+    ],
+  };
+}
 export function reportExport(sum, config, range, type, section) {
   const metadata = [
     ["ช่วงวันที่", ...range.map(formatThaiDate)],

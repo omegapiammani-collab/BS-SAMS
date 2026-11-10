@@ -556,7 +556,23 @@ nav button svg:last-child:not(:first-child) {
   grid-row: span 2;
 }
 .village-filter {
-  max-width: 320px;
+  width: fit-content;
+  max-width: 100%;
+}
+.village-filter select {
+  width: auto;
+  max-width: 100%;
+}
+.village-chart-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.village-chart-controls > .actions {
+  margin-bottom: 17px;
+  align-self: flex-end;
 }
 .village-bars > div {
   display: grid;
@@ -581,7 +597,7 @@ nav button svg:last-child:not(:first-child) {
     row-gap: 16px;
     margin: 16px 0;
   }
-  .dashboard-grid .village-bars > div {
+  .village-panel .village-bars > div {
     grid-column: 1 / -1;
     grid-template-columns: subgrid;
     column-gap: 8px;
@@ -799,9 +815,6 @@ nav button svg:last-child:not(:first-child) {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
-}
-.filters .date-help {
-  display: none;
 }
 .registry-filter-footer {
   display: flex;
@@ -1771,14 +1784,10 @@ summary {
   }
 }
 
-.date-help,
 .date-error {
   display: block;
   font-size: var(--font-caption);
   margin-top: 0.25rem;
-}
-.date-help {
-  color: var(--text-primary);
 }
 .date-error {
   color: #9f1f5c;

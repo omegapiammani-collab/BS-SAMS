@@ -1,5 +1,5 @@
 import { categoryColors } from "./category-colors.js";
-import { reportExport } from "./report-export.js";
+import { reportExport, villageChartExport } from "./report-export.js";
 import React, { useEffect, useRef, useState } from "react";
 import {
   Users,
@@ -109,16 +109,75 @@ function SubmissionChannelsChart({ counts }) {
     </section>
   );
 }
+function VillageChart({
+  config,
+  summary,
+  category = "",
+  onCategoryChange,
+  actions,
+  disabled = false,
+}) {
+  const villages =
+    category === ""
+      ? summary.villages
+      : summary.villagesByCategory[Number(category)];
+  const max = Math.max(...Object.values(villages), 1);
+  return (
+    <section
+      className="panel village-panel"
+      aria-label="กราฟผู้ประสบปัญหารายหมู่บ้าน"
+    >
+      <div className="panel-title">
+        <h2>ผู้ประสบปัญหารายหมู่บ้าน</h2>
+        <span className="small muted">
+          {config.villages.length} หมู่บ้าน · หน่วย: คน
+        </span>
+      </div>
+      {onCategoryChange && (
+        <div className="village-chart-controls">
+          <div className="village-filter">
+            <Field label="ประเภทความช่วยเหลือ">
+              <select
+                disabled={disabled}
+                value={category}
+                onChange={(event) => onCategoryChange(event.target.value)}
+              >
+                <option value="">ทั้งหมด</option>
+                {categories.map((category, index) => (
+                  <option key={category} value={String(index)}>
+                    {category}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          </div>
+          {actions}
+        </div>
+      )}
+      <div className="village-bars" aria-live="polite">
+        {config.villages.map((v) => (
+          <div key={v.id}>
+            <span>
+              ม.{v.id} {v.name}
+            </span>
+            <div className="track">
+              <i
+                style={{
+                  width: `${((villages[v.id] || 0) / max) * 100}%`,
+                }}
+              />
+            </div>
+            <strong>{n(villages[v.id])}</strong>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
 export function Dashboard({ config, range, refresh, onRegistry }) {
   const [d, error] = useSummary(range, refresh);
-  const [villageCategory, setVillageCategory] = useState("");
   if (error) return <ErrorBox error={error} />;
   if (!d) return <p>กำลังโหลดภาพรวม…</p>;
-  const villages =
-    villageCategory === ""
-      ? d.villages
-      : d.villagesByCategory[Number(villageCategory)];
-  const max = Math.max(...Object.values(villages), 1);
   return (
     <>
       <div className="metrics">
@@ -214,46 +273,7 @@ export function Dashboard({ config, range, refresh, onRegistry }) {
             </div>
           </div>
         </section>
-        <section className="panel village-panel">
-          <div className="panel-title">
-            <h2>ผู้ประสบปัญหารายหมู่บ้าน</h2>
-            <span className="small muted">
-              {config.villages.length} หมู่บ้าน · หน่วย: คน
-            </span>
-          </div>
-          <div className="village-filter">
-            <Field label="ประเภทความช่วยเหลือ">
-              <select
-                value={villageCategory}
-                onChange={(event) => setVillageCategory(event.target.value)}
-              >
-                <option value="">ทั้งหมด</option>
-                {categories.map((category, index) => (
-                  <option key={category} value={String(index)}>
-                    {category}
-                  </option>
-                ))}
-              </select>
-            </Field>
-          </div>
-          <div className="village-bars" aria-live="polite">
-            {config.villages.map((v) => (
-              <div key={v.id}>
-                <span>
-                  ม.{v.id} {v.name}
-                </span>
-                <div className="track">
-                  <i
-                    style={{
-                      width: `${((villages[v.id] || 0) / max) * 100}%`,
-                    }}
-                  />
-                </div>
-                <strong>{n(villages[v.id])}</strong>
-              </div>
-            ))}
-          </div>
-        </section>
+        <VillageChart config={config} summary={d} />
         <SubmissionChannelsChart counts={d.submissionChannels} />
         <section className="panel">
           <div className="panel-title">
@@ -415,6 +435,7 @@ export function Reports({ user, config, range, setRange }) {
   const controls = useRef(null);
   const [d, error] = useSummary(range),
     [type, setType] = useState("category"),
+    [villageCategory, setVillageCategory] = useState(""),
     [exportError, setError] = useState(""),
     [busy, setBusy] = useState(false);
   const rows = d
@@ -437,7 +458,16 @@ export function Reports({ user, config, range, setRange }) {
         from: range[0],
         to: range[1],
       });
-      const output = reportExport(sum, config, range, type, section);
+      const exportConfig = {
+        ...config,
+        villages: config.villages.filter(
+          (v) => user.role === "admin" || user.villages.includes(Number(v.id)),
+        ),
+      };
+      const output =
+        section === "village-chart"
+          ? villageChartExport(sum, exportConfig, range, villageCategory)
+          : reportExport(sum, config, range, type, section);
       await downloadRows(output.rows, format, output.name, output.pdfOptions);
     } catch (e) {
       setError(e.message);
@@ -450,7 +480,11 @@ export function Reports({ user, config, range, setRange }) {
       className="actions"
       role="group"
       aria-label={
-        section === "monthly" ? "ส่งออกรายละเอียดรายเดือน" : "ส่งออกตารางสรุป"
+        section === "monthly"
+          ? "ส่งออกรายละเอียดรายเดือน"
+          : section === "village-chart"
+            ? "ส่งออกกราฟรายหมู่บ้าน"
+            : "ส่งออกตารางสรุป"
       }
     >
       {["csv", "xlsx", "pdf"].map((format) => (
@@ -541,6 +575,16 @@ export function Reports({ user, config, range, setRange }) {
             </div>
           ))}
         </section>
+      )}
+      {d && (
+        <VillageChart
+          config={config}
+          summary={d}
+          category={villageCategory}
+          onCategoryChange={setVillageCategory}
+          actions={exportButtons("village-chart")}
+          disabled={busy}
+        />
       )}
       <section className="panel">
         <div className="panel-title">
