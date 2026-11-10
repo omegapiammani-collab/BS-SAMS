@@ -28,3 +28,29 @@ test("PDF preserves ragged report rows, Thai text and formula-like text", () => 
     "A3",
   );
 });
+
+test("PDF date subtitles appear above the table without changing column layout", () => {
+  const doc = pdfDocument(
+    [
+      ["คำนำหน้า", "ชื่อ"],
+      ["นาย", "ทดสอบ"],
+    ],
+    "ทะเบียน",
+    {
+      subtitles: [
+        "วันที่ยื่นคำขอ · ตั้งแต่วันที่ 01/10/2569",
+        "วันที่ได้รับการช่วยเหลือ · ถึงวันที่ 30/11/2569",
+      ],
+    },
+  );
+  assert.equal(
+    doc.content[0].text.replace(/ํา/g, "ำ"),
+    "วันที่ยื่นคำขอ · ตั้งแต่วันที่ 01/10/2569",
+  );
+  assert.equal(
+    doc.content[1].text.replace(/ํา/g, "ำ"),
+    "วันที่ได้รับการช่วยเหลือ · ถึงวันที่ 30/11/2569",
+  );
+  assert.equal(doc.content[2].table.headerRows, 1);
+  assert.equal(doc.content[2].table.body.length, 2);
+});

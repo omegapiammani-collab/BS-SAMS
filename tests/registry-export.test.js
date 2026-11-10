@@ -1,6 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { registryExportRows } from "../src/registry-export.js";
+import {
+  registryExportRows,
+  registryExportFile,
+} from "../src/registry-export.js";
 import { childAssistanceType, newChild } from "../src/children.js";
 import { age, disabilities } from "../src/domain.js";
 
@@ -176,4 +179,44 @@ test("registry exports include child identity and assistance type without remove
   assert.equal(registryExportRows([parent], { cat: "1" }).length, 2);
   assert.equal(registryExportRows([parent], { cat: "0" }).length, 4);
   assert.ok(!JSON.stringify(rows).includes(child.id));
+});
+
+test("registry export includes only applied date ranges with Thai years in all formats", () => {
+  const filters = {
+    requestFrom: "2026-10-01",
+    requestTo: "2026-10-31",
+    receivedFrom: "2026-11-01",
+    receivedTo: "2026-11-30",
+  };
+  for (const format of ["csv", "xlsx", "pdf"]) {
+    const output = registryExportFile([], filters, format);
+    assert.deepEqual(output.pdfOptions.subtitles, [
+      "วันที่ยื่นคำขอ · ตั้งแต่วันที่ 01/10/2569 · ถึงวันที่ 31/10/2569",
+      "วันที่ได้รับการช่วยเหลือ · ตั้งแต่วันที่ 01/11/2569 · ถึงวันที่ 30/11/2569",
+    ]);
+    if (format !== "pdf") {
+      assert.deepEqual(output.rows.slice(0, 3), [
+        ["วันที่ยื่นคำขอ", "ตั้งแต่วันที่ 01/10/2569", "ถึงวันที่ 31/10/2569"],
+        [
+          "วันที่ได้รับการช่วยเหลือ",
+          "ตั้งแต่วันที่ 01/11/2569",
+          "ถึงวันที่ 30/11/2569",
+        ],
+        [],
+      ]);
+      assert.equal(output.rows[3][0], "คำนำหน้า");
+    } else assert.equal(output.rows[0][0], "คำนำหน้า");
+    assert.deepEqual(
+      registryExportFile([person], {}, format).rows,
+      registryExportRows([person]),
+    );
+  }
+  assert.deepEqual(
+    registryExportFile([], { requestFrom: "2026-10-01" }).pdfOptions.subtitles,
+    ["วันที่ยื่นคำขอ · ตั้งแต่วันที่ 01/10/2569"],
+  );
+  assert.deepEqual(
+    registryExportFile([], { receivedTo: "2026-11-30" }).pdfOptions.subtitles,
+    ["วันที่ได้รับการช่วยเหลือ · ถึงวันที่ 30/11/2569"],
+  );
 });

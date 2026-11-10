@@ -236,7 +236,15 @@ try {
         encoding: "utf8",
       })
         .replace(/[\s\u200b]/g, "")
-        .replace(/ำา/g, "ำ");
+        .replace(/ำา/g, "ำ")
+        .replace(/ํา/g, "ำ");
+      for (const label of [
+        "วันที่ยื่นคำขอ",
+        "วันที่ได้รับการช่วยเหลือ",
+        "ตั้งแต่วันที่01/10/2569",
+        "ถึงวันที่31/10/2569",
+      ])
+        assert.ok(text.includes(label));
       for (const name of ["กมลพร", "มานพ", "เด็กตัวอย่าง"])
         assert.ok(text.includes(name));
       for (const name of ["กิตติ", "ณัฐพร", "จารุวรรณ"])
@@ -247,10 +255,14 @@ try {
         extension === "csv"
           ? await book.csv.readFile(file, { map: (value) => value })
           : (await book.xlsx.readFile(file)).worksheets[0];
-      assert.equal(sheet.rowCount, 4);
-      const column = sheet.getRow(1).values.indexOf("ชื่อ");
+      assert.equal(sheet.rowCount, 7);
+      assert.equal(sheet.getCell("A1").value, "วันที่ยื่นคำขอ");
+      assert.equal(sheet.getCell("A2").value, "วันที่ได้รับการช่วยเหลือ");
+      assert.equal(sheet.getCell("B1").value, "ตั้งแต่วันที่ 01/10/2569");
+      assert.equal(sheet.getCell("C2").value, "ถึงวันที่ 31/10/2569");
+      const column = sheet.getRow(4).values.indexOf("ชื่อ");
       assert.deepEqual(
-        [2, 3, 4].map((row) => sheet.getRow(row).getCell(column).value),
+        [5, 6, 7].map((row) => sheet.getRow(row).getCell(column).value),
         ["กมลพร", "เด็กตัวอย่าง", "มานพ"],
       );
     }

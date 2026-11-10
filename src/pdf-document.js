@@ -11,6 +11,7 @@ export function pdfDocument(
     pairedColumns = [],
     lineBreakBefore = [],
     dontBreakRows = false,
+    subtitles = [],
   } = {},
 ) {
   const columns = Math.max(1, ...rows.map((row) => row.length));
@@ -23,7 +24,7 @@ export function pdfDocument(
       groups.at(-1).push(row);
     }
   }
-  return {
+  const document = {
     info: { title, creator: "BS-SAMS" },
     pageSize: columns > 6 ? "A3" : "A4",
     pageOrientation: orientation,
@@ -169,4 +170,13 @@ export function pdfDocument(
         };
       }),
   };
+  document.content.unshift(
+    ...subtitles.map((text) => ({
+      // Explicit Thai sara am decomposition avoids an ambiguous font subset map
+      // when the first regular-font text contains ำ before a standalone า.
+      text: text.normalize("NFKD"),
+      margin: [0, 0, 0, 6],
+    })),
+  );
+  return document;
 }

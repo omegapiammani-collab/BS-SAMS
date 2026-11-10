@@ -127,7 +127,7 @@ export function ThaiDateInput({
           ref={ref}
           type="text"
           inputMode="numeric"
-          placeholder="วว/ดด/ปปปป พ.ศ."
+          placeholder="วว/ดด/ปปปป"
           value={draft}
           aria-describedby={[
             props["aria-describedby"],

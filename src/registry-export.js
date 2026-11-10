@@ -9,6 +9,27 @@ export const registryPdfOptions = {
   columnWeights: [1, 1, 1, 1.5, 1.2, 0.6, 0.8, 0.6, 1, 1.3, 2.4, 1.7, 1.5],
 };
 
+export function registryExportFile(people, filters = {}, format = "pdf") {
+  const rows = registryExportRows(people, filters);
+  const dates = [
+    ["วันที่ยื่นคำขอ", filters.requestFrom, filters.requestTo],
+    ["วันที่ได้รับการช่วยเหลือ", filters.receivedFrom, filters.receivedTo],
+  ]
+    .filter(([, from, to]) => from || to)
+    .map(([label, from, to]) => [
+      label,
+      from ? `ตั้งแต่วันที่ ${formatThaiDate(from)}` : "",
+      to ? `ถึงวันที่ ${formatThaiDate(to)}` : "",
+    ]);
+  return {
+    rows: format === "pdf" || !dates.length ? rows : [...dates, [], ...rows],
+    pdfOptions: {
+      ...registryPdfOptions,
+      subtitles: dates.map((row) => row.filter(Boolean).join(" · ")),
+    },
+  };
+}
+
 export function registryExportRows(people, filters = {}) {
   return [
     [
