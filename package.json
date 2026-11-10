@@ -26,7 +26,8 @@
     "test:logout": "node tests/logout-integration.mjs",
     "test:draft-status": "node tests/draft-status-integration.mjs",
     "test:channel-filter": "node tests/submission-channel-filter.mjs",
-    "test:village-dashboard": "node tests/village-dashboard-integration.mjs"
+    "test:village-dashboard": "node tests/village-dashboard-integration.mjs",
+    "test:person-pdf": "node --test tests/person-export.test.js tests/person-pdf-layout.test.js"
   },
   "dependencies": {
     "@fontsource/sarabun": "^5.2.0",

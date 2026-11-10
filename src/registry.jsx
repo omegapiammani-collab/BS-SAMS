@@ -4,7 +4,7 @@ import { DateDraftContext } from "./date-draft-context.js";
 import { DraftRecovery } from "./draft-recovery.jsx";
 import { useServerDraft } from "./use-server-draft.js";
 import { focusAndReveal } from "./form-focus.js";
-import { personExport } from "./person-export.js";
+import { personExport, personPdfOptions } from "./person-export.js";
 import { registryExportFile } from "./registry-export.js";
 import { orderRequests } from "./request-order.js";
 import { formatThaiDate } from "./thai-date.js";
@@ -186,7 +186,7 @@ export function Registry({ user, config, refresh }) {
         personExport(saved, config),
         "pdf",
         "รายละเอียดผู้ประสบปัญหา-" + saved.id,
-        { orientation: "portrait", title: "รายละเอียดผู้ประสบปัญหา" },
+        { ...personPdfOptions, title: "รายละเอียดผู้ประสบปัญหา" },
       );
     } catch (error) {
       setError(error.message);

@@ -12,6 +12,8 @@ export function pdfDocument(
     lineBreakBefore = [],
     dontBreakRows = false,
     subtitles = [],
+    keepSectionsTogether = false,
+    keepWithHeaderRows = 0,
   } = {},
 ) {
   const columns = Math.max(1, ...rows.map((row) => row.length));
@@ -61,6 +63,45 @@ export function pdfDocument(
         // pdfmake's lightHorizontalLines layout adds 8pt on each side of
         // internal column boundaries, with no padding at the outer edges.
         const availableWidth = pageWidth - 56 - (count - 1) * 16;
+        const fontSize = columns > 6 ? 9 : orientation === "portrait" ? 10 : 11;
+        const pageHeight =
+          orientation === "portrait"
+            ? columns > 6
+              ? 1190.55
+              : 841.89
+            : columns > 6
+              ? 841.89
+              : 595.28;
+        const estimatedHeight = keepSectionsTogether
+          ? group.reduce(
+              (height, row) =>
+                height +
+                8 +
+                fontSize *
+                  1.5 *
+                  Math.max(
+                    1,
+                    ...row.map((value, col) => {
+                      const charsPerLine = Math.max(
+                        1,
+                        Math.floor(
+                          ((availableWidth * weights[col]) / totalWeight - 4) /
+                            fontSize,
+                        ),
+                      );
+                      return String(value ?? "")
+                        .split("\n")
+                        .reduce(
+                          (lines, line) =>
+                            lines +
+                            Math.max(1, Math.ceil(line.length / charsPerLine)),
+                          0,
+                        );
+                    }),
+                  ),
+              0,
+            )
+          : 0;
         // Very long histories must still span pages. Split them into bounded
         // continuation rows, repeating identity so each page remains readable.
         const printableRows = group.flatMap((row, index) => {
@@ -106,9 +147,13 @@ export function pdfDocument(
         });
         return {
           margin: [0, 0, 0, index === groups.length - 1 ? 0 : 12],
+          ...(keepSectionsTogether && estimatedHeight < (pageHeight - 78) * 0.85
+            ? { unbreakable: true }
+            : {}),
           layout: "lightHorizontalLines",
           table: {
             headerRows: 1,
+            keepWithHeaderRows,
             dontBreakRows,
             widths: weights.map(
               (weight) => (availableWidth * weight) / totalWeight,

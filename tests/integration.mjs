@@ -1060,8 +1060,8 @@ try {
       .getByLabel("รูปแบบรายงาน", { exact: true })
       .selectOption("village");
     const villagePanel = page.locator("section.panel").filter({
-      has: page.getByRole("heading", {
-        name: "จำนวนผู้ประสบปัญหารายหมู่บ้าน",
+      has: page.getByRole("group", {
+        name: "ส่งออกตารางสรุป",
         exact: true,
       }),
     });

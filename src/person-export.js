@@ -5,10 +5,18 @@ import {
   personStatus,
   statuses,
   requestReasonLabel,
+  closed,
 } from "./domain.js";
 import { formatThaiDate } from "./thai-date.js";
 import { formatMoney, sumMoney, thailandDate } from "./money.js";
 import { orderRequests } from "./request-order.js";
+export const personPdfOptions = {
+  orientation: "portrait",
+  columnWeights: [1, 2],
+  thaiWordWrapColumns: [0, 1],
+  keepSectionsTogether: true,
+  keepWithHeaderRows: 1,
+};
 export function personExport(person, config) {
   const village = config.villages.find((v) => v.id === Number(person.village));
   const rows = [
@@ -50,8 +58,10 @@ export function personExport(person, config) {
       ["วันที่ยื่นคำขอ", formatThaiDate(request.date)],
       ["สถานะคำขอ", statuses[request.status]],
       ["สภาพปัญหาและรายละเอียดคำขอ", request.note || ""],
-      [requestReasonLabel(request.status), request.reason || ""],
     );
+    if (closed.includes(request.status))
+      rows.push([requestReasonLabel(request.status), request.reason || ""]);
+    else if (request.reason) rows.push(["หมายเหตุสถานะคำขอ", request.reason]);
     for (const [childIndex, child] of (request.children || []).entries())
       rows.push(
         [],
@@ -71,7 +81,11 @@ export function personExport(person, config) {
         ],
       );
     if (!request.payments.length)
-      rows.push(["ประวัติการช่วยเหลือ", "ยังไม่มีการช่วยเหลือ"]);
+      rows.push(
+        [],
+        ["ประวัติการช่วยเหลือ", `ของคำขอที่ ${index + 1}`],
+        ["สถานะการช่วยเหลือ", "ยังไม่มีการช่วยเหลือ"],
+      );
     for (const [number, payment] of request.payments.entries())
       rows.push(
         [],
